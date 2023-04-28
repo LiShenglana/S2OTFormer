@@ -70,9 +70,9 @@ class USOTDataset(Dataset):
 
         # Augmentation for template patch
         self.template_aug_seq = iaa.Sequential([
-            # iaa.Fliplr(0.4),
-            # iaa.Flipud(0.2),
-            # iaa.PerspectiveTransform(scale=(0.01, 0.07)),
+            iaa.Fliplr(0.4),
+            iaa.Flipud(0.2),
+            iaa.PerspectiveTransform(scale=(0.01, 0.07)),
             iaa.CoarseDropout((0.0, 0.05), size_percent=0.15, per_channel=0.5),
             iaa.SaltAndPepper(0.05, per_channel=True),
         ])
@@ -86,9 +86,9 @@ class USOTDataset(Dataset):
 
         # Augmentation for memory search areas
         self.memory_aug_seq = iaa.Sequential([
-            # iaa.Fliplr(0.4), #0.4
-            # iaa.Flipud(0.2), #0.2
-            # iaa.PerspectiveTransform(scale=(0.01, 0.15)),
+            iaa.Fliplr(0.4), #0.4
+            iaa.Flipud(0.2), #0.2
+            iaa.PerspectiveTransform(scale=(0.01, 0.15)),
             iaa.MultiplyHueAndSaturation((0.5, 1.5), per_channel=True),
             iaa.MultiplyBrightness((0.5, 1.5)),
             iaa.MotionBlur(k=(3, 9), angle=[-60, 60]),
@@ -436,27 +436,27 @@ class USOTDataset(Dataset):
         if not search:
             # Augmentation for template
             # images, bbs_aug = self.template_aug_seq(images=images, bounding_boxes=bbs)
-            # template_aug_seq = self.template_aug_seq.to_deterministic()
-            image_color_aug, bbs_aug = self.template_aug_seq(image=image_color, bounding_boxes=bbs)
-            image_ir_aug = self.template_aug_seq(image=image_ir)
+            template_aug_seq = self.template_aug_seq.to_deterministic()
+            image_color_aug, bbs_aug = template_aug_seq(image=image_color, bounding_boxes=bbs)
+            image_ir_aug = template_aug_seq(image=image_ir)
             # image_color_aug = template_aug_seq(image=image_color)
             # bbs_aug = template_aug_seq.augment_bounding_boxes([bbs])[0]
             # ia.imshow(np.hstack([bbs_aug.draw_on_image(image_color_aug), bbs_aug.draw_on_image(image_ir_aug)]))
         elif not cycle_memory:
             # Augmentation for search area
             # images, bbs_aug = self.search_aug_seq(images=images, bounding_boxes=bbs)
-            # search_aug_seq = self.search_aug_seq.to_deterministic()
-            image_color_aug, bbs_aug = self.search_aug_seq(image=image_color, bounding_boxes=bbs)
-            image_ir_aug = self.search_aug_seq(image=image_ir)
+            search_aug_seq = self.search_aug_seq.to_deterministic()
+            image_color_aug, bbs_aug = search_aug_seq(image=image_color, bounding_boxes=bbs)
+            image_ir_aug = search_aug_seq(image=image_ir)
             # image_color_aug = search_aug_seq(image=image_color)
             # bbs_aug = search_aug_seq.augment_bounding_boxes([bbs])[0]
             # ia.imshow(np.hstack([bbs_aug.draw_on_image(image_color_aug), bbs_aug.draw_on_image(image_ir_aug)]))
         else:
             # Augmentation for memory search areas
             # images, bbs_aug = self.memory_aug_seq(images=images, bounding_boxes=bbs)
-            # memory_aug_seq = self.memory_aug_seq.to_deterministic()
-            image_color_aug, bbs_aug = self.memory_aug_seq(image=image_color, bounding_boxes=bbs)
-            image_ir_aug = self.memory_aug_seq(image=image_ir)
+            memory_aug_seq = self.memory_aug_seq.to_deterministic()
+            image_color_aug, bbs_aug = memory_aug_seq(image=image_color, bounding_boxes=bbs)
+            image_ir_aug = memory_aug_seq(image=image_ir)
         bbox = Corner(self.clip_number(bbs_aug[0].x1, _max=image_color_aug.shape[0]),
                       self.clip_number(bbs_aug[0].y1, _max=image_color_aug.shape[1]),
                       self.clip_number(bbs_aug[0].x2, _max=image_color_aug.shape[0]),
