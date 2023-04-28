@@ -138,14 +138,7 @@ class USOTDataset(Dataset):
         template_image_color = search_image_color
         template_image_ir = search_image_ir
         template_bbox = search_bbox
-        # Augmentation for template and search area
-        # template_aug_color, bbox_t_color, dag_param_t = self._augmentation(template_image_color,
-        #                                                        template_bbox, self.template_size)
-        # template_aug_ir, bbox_t_ir, _ = self._augmentation(template_image_ir,
-        #                                                        template_bbox, self.template_size)
-        # search_aug_color, bbox_s_color, dag_param_s_color = self._augmentation(search_image_color,
-        #                                                      search_bbox, self.search_size, search=True)
-        # search_aug_ir, bbox_s_ir, dag_param_s_ir = self._augmentation(search_image_ir, search_bbox, self.search_size, search=True)
+
         template_aug_color, template_aug_ir, bbox_t, dag_param_t = self._augmentation(template_image_color, template_image_ir,
                                                                template_bbox, self.template_size)
         search_aug_color, search_aug_ir, bbox_s, dag_param_s = self._augmentation(search_image_color, search_image_ir,

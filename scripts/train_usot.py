@@ -42,7 +42,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Train USOT')
     # File for basic configs
     parser.add_argument('--cfg', type=str,
-                        default='/home/cscv/Documents/lsl/USOT-copy/experiments/train/USOT.yaml', help='yaml configure file name')
+                        default='/home/cscv/Documents/lsl/USOTFormer/experiments/train/USOT.yaml', help='yaml configure file name')
     parser.add_argument('--gpus', type=str, help='gpus')
     parser.add_argument('--workers', type=int, help='num of dataloader workers', default='16')
     parser.add_argument('--use_wandb', type=int, choices=[0, 1], default=0)  # whether to use wandb
@@ -188,15 +188,6 @@ def build_opt_lr(cfg, model, current_epoch=1):
         except:
             pass
 
-    # if current_epoch >= cfg.USOT.TRAIN.UNFIX_EPOCH:
-    #     #VIT
-    #     trainable_params += [{'params': filter(lambda x: x.requires_grad,
-    #                                            model.fuse.parameters()),
-    #                           'lr': cfg.USOT.TRAIN.LAYERS_LR * cfg.USOT.TRAIN.BASE_LR}]
-    # else:
-    #     trainable_params += [{'params': filter(lambda x: x.requires_grad,
-    #                                            model.fuse.parameters()),
-    #                           'lr': 0.1 * cfg.USOT.TRAIN.BASE_LR}]
 
     try:
         trainable_params += [{'params': model.neck.parameters(),
