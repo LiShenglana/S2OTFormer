@@ -70,9 +70,9 @@ class USOTDataset(Dataset):
 
         # Augmentation for template patch
         self.template_aug_seq = iaa.Sequential([
-            iaa.Fliplr(0.4),
-            iaa.Flipud(0.2),
-            iaa.PerspectiveTransform(scale=(0.01, 0.07)),
+            # iaa.Fliplr(0.4),
+            # iaa.Flipud(0.2),
+            # iaa.PerspectiveTransform(scale=(0.01, 0.07)),
             iaa.CoarseDropout((0.0, 0.05), size_percent=0.15, per_channel=0.5),
             iaa.SaltAndPepper(0.05, per_channel=True),
         ])

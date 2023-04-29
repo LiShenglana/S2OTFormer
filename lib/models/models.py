@@ -16,7 +16,7 @@ from torch.autograd import Variable
 import numpy as np
 import importlib
 import torch.nn.functional as F
-
+from models.tracker_utils import vis_attn_maps
 from util.misc import (NestedTensor, nested_tensor_from_tensor,
                        nested_tensor_from_tensor_2,
                        accuracy)
@@ -56,6 +56,7 @@ class USOT_(nn.Module):
         self.bbox_embed = None
         self.debug = True
         self.use_visdom = False
+        self.vis_attn = False
         self.modality = 'RGB-T'  # RGB T RGB-T
         self.fuse_method = 'Cross_Attention' # Add Cross_Attention
         if self.debug:
@@ -342,6 +343,11 @@ class USOT_(nn.Module):
             elif self.fuse_method == 'Cross_Attention':
                 _, _, _, Wx = xf_color.shape
                 xf_cat = torch.cat((xf_color, xf_ir), 1)
+                # if self.vis_attn:
+                #     attn_weights = []
+                #     hooks = []
+                #     hooks.append(self.featurefusion_network.encoder.layers[0].multihead_attn1.register_forward_hook(
+                #             lambda self, input, output: attn_weights.append(output)))
                 xf_att = self.featurefusion_network(self.input_proj1(xf_cat), self.input_proj2(xf_color),
                                                     self.input_proj2(xf_ir), Wx)
                 xf = torch.add(self.input_proj2(xf_color), self.input_proj2(xf_ir))
@@ -376,9 +382,9 @@ class USOT_(nn.Module):
             bbox_pred, cls_pred, cls_feature, reg_feature, cls_memory_pred = self.connect_model(xf, kernel=self.zf,
                                                                                                 memory_kernel=template_mem,
                                                                                                 memory_confidence=score_mem)
-            corr = self.correlation(xf_att, self.zf_att)
-            corr = self.class_embed(corr)
-            corr = self.change(corr, xf_att.shape[3])
+            # corr = self.correlation(xf_att, self.zf_att)
+            # corr = self.class_embed(corr)
+            # corr = self.change(corr, xf_att.shape[3])
             # cls_pred = cls_pred.squeeze(0)
             # c, h, w = cls_pred.size()
             # mask = torch.zeros((c, h, w)).cuda()
@@ -390,13 +396,21 @@ class USOT_(nn.Module):
             # cls_pred = cls_pred * mask
             # cls_pred = cls_pred.unsqueeze(0)
 
+            # if self.vis_attn:
+            #     for hook in hooks:
+            #         hook.remove()
+            #     vis_attn_maps(attn_weights, q_w=8, k_w=4, skip_len=16, x1=self.input_proj1(xf_cat), x2=self.input_proj2(xf_color),
+            #                 x1_title='cat', x2_title='color',
+            #                 save_path='vis_attn_weights/t2ot_vis/%04d' % 1)
+            #     print("save vis_attn of frame-{} done.".format(1))
+
             if self.debug:
                 if self.use_visdom:
                     self.visdom.register(np.squeeze(x_color, 0), 'image', 1, 'search_color')
                     self.visdom.register(np.squeeze(x_ir, 0), 'image', 1, 'search_ir')
                     self.visdom.register(cls_pred.view(cls_memory_pred.shape[2], cls_memory_pred.shape[3]), 'heatmap', 1, 'cls_memory')
                     self.visdom.register(cls_pred.view(cls_pred.shape[2], cls_pred.shape[3]), 'heatmap', 1, 'score_map')
-                    self.visdom.register(corr.view(corr.shape[2], corr.shape[3]), 'heatmap', 1, 'corr')
+                    # self.visdom.register(corr.view(corr.shape[2], corr.shape[3]), 'heatmap', 1, 'corr')
 
                     while self.pause_mode:
                         if self.step:
@@ -544,10 +558,10 @@ class USOT_(nn.Module):
             search_pooled_feature = search_pooled_feature.repeat(1, mem_size, 1, 1, 1)
             search_pooled_feature = search_pooled_feature.view(-1, cspf, wspf, hspf)
 
-            batch, cspf, wspf, hspf = xf_att.shape
-            search_feature_att = xf_att.view(batch, 1, cspf, wspf, hspf)
-            search_feature_att = search_feature_att.repeat(1, mem_size, 1, 1, 1)
-            search_feature_att = search_feature_att.view(-1, cspf, wspf, hspf)
+            # batch, cspf, wspf, hspf = xf_att.shape
+            # search_feature_att = xf_att.view(batch, 1, cspf, wspf, hspf)
+            # search_feature_att = search_feature_att.repeat(1, mem_size, 1, 1, 1)
+            # search_feature_att = search_feature_att.view(-1, cspf, wspf, hspf)
 
             # Repeat the original template
             batch, cz, hz, wz = zf.shape
@@ -555,16 +569,16 @@ class USOT_(nn.Module):
             zf_mem = zf_mem.repeat(1, mem_size, 1, 1, 1)
             zf_mem = zf_mem.view(-1, cz, hz, wz)
 
-            batch, cz, hz, wz = zf_att.shape
-            zf_mem_att = zf_att.view(batch, 1, cz, hz, wz)
-            zf_mem_att = zf_mem_att.repeat(1, mem_size, 1, 1, 1)
-            zf_mem_att = zf_mem_att.view(-1, cz, hz, wz)
+            # batch, cz, hz, wz = zf_att.shape
+            # zf_mem_att = zf_att.view(batch, 1, cz, hz, wz)
+            # zf_mem_att = zf_mem_att.repeat(1, mem_size, 1, 1, 1)
+            # zf_mem_att = zf_mem_att.view(-1, cz, hz, wz)
 
             # Get the intermediate target bbox and cls score in memory search areas (tracking with offline module)
             off_forward_bbox, off_forward_cls, forward_x_store, _, _ = self.connect_model(xf_mem, kernel=zf_mem)
 
-            corr_off = self.correlation(xf_mem_att, zf_mem_att)
-            corr_off = self.change(self.class_embed(corr_off), w=31)
+            # corr_off = self.correlation(xf_mem_att, zf_mem_att)
+            # corr_off = self.change(self.class_embed(corr_off), w=31)
             # correlation_loss_off = self._weighted_BCE(corr_off, label2)
 
             # Get the mem_forward_cls score in memory search areas (tracking with online module)
@@ -572,21 +586,21 @@ class USOT_(nn.Module):
             _, _, _, _, mem_forward_cls = self.connect_model(xf_mem, memory_kernel=search_pooled_feature,
                                                              memory_confidence=fake_confidence,
                                                              cls_x_store=forward_x_store)
-            corr_mem = self.correlation(xf_mem_att, search_feature_att)
-            corr_mem = self.change(self.class_embed(corr_mem), w=31)
-            Resize_to = transforms.Resize([mem_forward_cls.shape[2], mem_forward_cls.shape[3]])
-            corr_mem = Resize_to(corr_mem)
-            corr_off = Resize_to(corr_off)
+            # corr_mem = self.correlation(xf_mem_att, search_feature_att)
+            # corr_mem = self.change(self.class_embed(corr_mem), w=31)
+            # Resize_to = transforms.Resize([mem_forward_cls.shape[2], mem_forward_cls.shape[3]])
+            # corr_mem = Resize_to(corr_mem)
+            # corr_off = Resize_to(corr_off)
 
             mem_forward_cls = mem_forward_cls.view(batch, mem_size, -1)
             off_forward_cls = off_forward_cls.view(batch, mem_size, -1)
-            corr_mem = corr_mem.view(batch, mem_size, -1)
-            corr_off = corr_off.view(batch, mem_size, -1)
+            # corr_mem = corr_mem.view(batch, mem_size, -1)
+            # corr_off = corr_off.view(batch, mem_size, -1)
 
             # Linearly combine off_forward_cls and mem_forward_cls as the forward response map
             # Note: weighted add memory_forward_cls and off_forward_cls, while bbox remains
-            forward_res_map = cls_ratio * (off_forward_cls + corr_off) + (1 - cls_ratio) * (mem_forward_cls + corr_mem)
-            # forward_res_map = cls_ratio * off_forward_cls + (1 - cls_ratio) * mem_forward_cls
+            # forward_res_map = cls_ratio * (off_forward_cls + corr_off) + (1 - cls_ratio) * (mem_forward_cls + corr_mem)
+            forward_res_map = cls_ratio * off_forward_cls + (1 - cls_ratio) * mem_forward_cls
             best_forward_cls = forward_res_map.max(dim=2)
             best_forward_cls_argmax = best_forward_cls.indices.view(batch, mem_size, 1, 1)
             best_forward_cls_argmax = best_forward_cls_argmax.repeat(1, 1, 1, 4)
