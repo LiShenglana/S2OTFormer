@@ -75,14 +75,14 @@ class USOTDataset(Dataset):
             # iaa.PerspectiveTransform(scale=(0.01, 0.07)),
             iaa.CoarseDropout((0.0, 0.05), size_percent=0.15, per_channel=0.5),
             iaa.SaltAndPepper(0.05, per_channel=True),
-        ])
+        ], random_order= True)
 
         # Augmentation for search area
         self.search_aug_seq = iaa.Sequential([
             iaa.MultiplyHueAndSaturation((0.5, 1.5), per_channel=True),
             iaa.MultiplyBrightness((0.5, 1.5)),
             iaa.MotionBlur(k=(3, 9), angle=[-60, 60]),
-        ])
+        ], random_order= True)
 
         # Augmentation for memory search areas
         self.memory_aug_seq = iaa.Sequential([
@@ -92,7 +92,7 @@ class USOTDataset(Dataset):
             iaa.MultiplyHueAndSaturation((0.5, 1.5), per_channel=True),
             iaa.MultiplyBrightness((0.5, 1.5)),
             iaa.MotionBlur(k=(3, 9), angle=[-60, 60]),
-        ])
+        ], random_order= True)
 
         # Training data information
         print('train datas: {}'.format(cfg.USOT.TRAIN.WHICH_USE))
@@ -433,67 +433,68 @@ class USOTDataset(Dataset):
         bbs = BoundingBoxesOnImage([
             BoundingBox(x1=bbox.x1, y1=bbox.y1, x2=bbox.x2, y2=bbox.y2)],
             shape=image_color.shape)
-        if not search:
-            # Augmentation for template
-            # images, bbs_aug = self.template_aug_seq(images=images, bounding_boxes=bbs)
-            template_aug_seq = self.template_aug_seq.to_deterministic()
-            image_color_aug, bbs_aug = template_aug_seq(image=image_color, bounding_boxes=bbs)
-            image_ir_aug = template_aug_seq(image=image_ir)
-            # image_color_aug = template_aug_seq(image=image_color)
-            # bbs_aug = template_aug_seq.augment_bounding_boxes([bbs])[0]
-            # ia.imshow(np.hstack([bbs_aug.draw_on_image(image_color_aug), bbs_aug.draw_on_image(image_ir_aug)]))
-        elif not cycle_memory:
-            # Augmentation for search area
-            # images, bbs_aug = self.search_aug_seq(images=images, bounding_boxes=bbs)
-            search_aug_seq = self.search_aug_seq.to_deterministic()
-            image_color_aug, bbs_aug = search_aug_seq(image=image_color, bounding_boxes=bbs)
-            image_ir_aug = search_aug_seq(image=image_ir)
-            # image_color_aug = search_aug_seq(image=image_color)
-            # bbs_aug = search_aug_seq.augment_bounding_boxes([bbs])[0]
-            # ia.imshow(np.hstack([bbs_aug.draw_on_image(image_color_aug), bbs_aug.draw_on_image(image_ir_aug)]))
-        else:
-            # Augmentation for memory search areas
-            # images, bbs_aug = self.memory_aug_seq(images=images, bounding_boxes=bbs)
-            memory_aug_seq = self.memory_aug_seq.to_deterministic()
-            image_color_aug, bbs_aug = memory_aug_seq(image=image_color, bounding_boxes=bbs)
-            image_ir_aug = memory_aug_seq(image=image_ir)
-        bbox = Corner(self.clip_number(bbs_aug[0].x1, _max=image_color_aug.shape[0]),
-                      self.clip_number(bbs_aug[0].y1, _max=image_color_aug.shape[1]),
-                      self.clip_number(bbs_aug[0].x2, _max=image_color_aug.shape[0]),
-                      self.clip_number(bbs_aug[0].y2, _max=image_color_aug.shape[1]))
-
-        # return images[0], images[1], bbox, param
-        return image_color_aug, image_ir_aug, bbox, param
+        # if not search:
+        #     # Augmentation for template
+        #     # images, bbs_aug = self.template_aug_seq(images=images, bounding_boxes=bbs)
+        #     template_aug_seq = self.template_aug_seq.to_deterministic()
+        #     image_color_aug, bbs_aug = template_aug_seq(image=image_color, bounding_boxes=bbs)
+        #     image_ir_aug = template_aug_seq(image=image_ir)
+        #     # image_color_aug = template_aug_seq(image=image_color)
+        #     # bbs_aug = template_aug_seq.augment_bounding_boxes([bbs])[0]
+        #     # ia.imshow(np.hstack([bbs_aug.draw_on_image(image_color_aug), bbs_aug.draw_on_image(image_ir_aug)]))
+        # elif not cycle_memory:
+        #     # Augmentation for search area
+        #     # images, bbs_aug = self.search_aug_seq(images=images, bounding_boxes=bbs)
+        #     search_aug_seq = self.search_aug_seq.to_deterministic()
+        #     image_color_aug, bbs_aug = search_aug_seq(image=image_color, bounding_boxes=bbs)
+        #     image_ir_aug = search_aug_seq(image=image_ir)
+        #     # image_color_aug = search_aug_seq(image=image_color)
+        #     # bbs_aug = search_aug_seq.augment_bounding_boxes([bbs])[0]
+        #     # ia.imshow(np.hstack([bbs_aug.draw_on_image(image_color_aug), bbs_aug.draw_on_image(image_ir_aug)]))
+        # else:
+        #     # Augmentation for memory search areas
+        #     # images, bbs_aug = self.memory_aug_seq(images=images, bounding_boxes=bbs)
+        #     memory_aug_seq = self.memory_aug_seq.to_deterministic()
+        #     image_color_aug, bbs_aug = memory_aug_seq(image=image_color, bounding_boxes=bbs)
+        #     image_ir_aug = memory_aug_seq(image=image_ir)
+        # bbox = Corner(self.clip_number(bbs_aug[0].x1, _max=image_color_aug.shape[0]),
+        #               self.clip_number(bbs_aug[0].y1, _max=image_color_aug.shape[1]),
+        #               self.clip_number(bbs_aug[0].x2, _max=image_color_aug.shape[0]),
+        #               self.clip_number(bbs_aug[0].y2, _max=image_color_aug.shape[1]))
+        #
+        # # return images[0], images[1], bbox, param
+        # return image_color_aug, image_ir_aug, bbox, param
         # bbs = [
         #     [BoundingBox(x1=bbox.x1, y1=bbox.y1, x2=bbox.x2, y2=bbox.y2)],
         #     [BoundingBox(x1=bbox.x1, y1=bbox.y1, x2=bbox.x2, y2=bbox.y2),
         #      BoundingBox(x1=bbox.x1, y1=bbox.y1, x2=bbox.x2, y2=bbox.y2)]
         # ]
-        # # images =[image_color, image_ir]
-        # images = torch.cat((torch.tensor(image_color).unsqueeze(0), torch.tensor(image_ir).unsqueeze(0)), 0).numpy()  #[2,128,128,3]
-        # if not search:
-        #     # Augmentation for template
-        #     images, bbs_aug = self.template_aug_seq(images=images, bounding_boxes=bbs)
-        #     # image_ir, _ = self.template_aug_seq(image=image_ir, bounding_boxes=bbs)
-        # elif not cycle_memory:
-        #     # Augmentation for search area
-        #     images, bbs_aug = self.search_aug_seq(images=images, bounding_boxes=bbs)
-        #     # image_ir, _ = self.search_aug_seq(image=image_ir, bounding_boxes=bbs)
-        # else:
-        #     # Augmentation for memory search areas
-        #     images, bbs_aug = self.memory_aug_seq(images=images, bounding_boxes=bbs)
-        #     # image_ir, _ = self.memory_aug_seq(image=image_ir, bounding_boxes=bbs)
-        #
-        # # image_color = torch.chunk(torch.tensor(image_cat), 2, 2)[0].numpy()
-        # # image_ir = torch.chunk(torch.tensor(image_cat), 2, 2)[1].numpy()
-        #
-        # bbox = Corner(self.clip_number(bbs_aug[0][0].x1, _max=image_color.shape[0]),
-        #               self.clip_number(bbs_aug[0][0].y1, _max=image_color.shape[1]),
-        #               self.clip_number(bbs_aug[0][0].x2, _max=image_color.shape[0]),
-        #               self.clip_number(bbs_aug[0][0].y2, _max=image_color.shape[1]))
-        #
-        # return images[0], images[1], bbox, param
-        # # return image_color, image_ir, bbox, param
+        # images =[image_color, image_ir]
+        images = torch.cat((torch.tensor(image_color).unsqueeze(0), torch.tensor(image_ir).unsqueeze(0)), 0).numpy()  #[2,128,128,3]
+        if not search:
+            # Augmentation for template
+            images, bbs_aug = self.template_aug_seq(images=images, bounding_boxes=bbs)
+            # ia.imshow(np.hstack([bbs_aug.draw_on_image(images[0]), bbs_aug.draw_on_image(images[1])]))
+            # image_ir, _ = self.template_aug_seq(image=image_ir, bounding_boxes=bbs)
+        elif not cycle_memory:
+            # Augmentation for search area
+            images, bbs_aug = self.search_aug_seq(images=images, bounding_boxes=bbs)
+            # image_ir, _ = self.search_aug_seq(image=image_ir, bounding_boxes=bbs)
+        else:
+            # Augmentation for memory search areas
+            images, bbs_aug = self.memory_aug_seq(images=images, bounding_boxes=bbs)
+            # image_ir, _ = self.memory_aug_seq(image=image_ir, bounding_boxes=bbs)
+
+        # image_color = torch.chunk(torch.tensor(image_cat), 2, 2)[0].numpy()
+        # image_ir = torch.chunk(torch.tensor(image_cat), 2, 2)[1].numpy()
+
+        bbox = Corner(self.clip_number(bbs_aug[0].x1, _max=images[0].shape[0]),
+                      self.clip_number(bbs_aug[0].y1, _max=images[0].shape[1]),
+                      self.clip_number(bbs_aug[0].x2, _max=images[0].shape[0]),
+                      self.clip_number(bbs_aug[0].y2, _max=images[0].shape[1]))
+
+        return images[0], images[1], bbox, param
+        # return image_color, image_ir, bbox, param
 
     def _dynamic_label(self, fixedLabelSize, c_shift, rPos=2, rNeg=0):
         """
