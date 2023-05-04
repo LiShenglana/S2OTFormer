@@ -9,6 +9,7 @@ import imgaug.augmenters as iaa
 from imgaug.augmentables.bbs import BoundingBox, BoundingBoxesOnImage
 from PIL import Image
 import datetime
+import imgaug as ia
 
 
 class USOTTracker(object):
@@ -147,6 +148,7 @@ class USOTTracker(object):
         ], shape=x_crop_color.shape)
         x_crop_aug_color, search_bbox_aug = self.aug_frame_init(image=x_crop_color, bounding_boxes=search_bbox_aug)
         x_crop_aug_ir, _ = self.aug_frame_init(image=x_crop_ir, bounding_boxes=search_bbox_aug)
+        # ia.imshow(np.hstack([search_bbox_aug[0].draw_on_image(x_crop_aug_color), search_bbox_aug[0].draw_on_image(x_crop_aug_ir)]))
         search_bbox_aug = [self.clip_number(search_bbox_aug[0].x1, _max=x_crop_aug_color.shape[0]),
                            self.clip_number(search_bbox_aug[0].y1, _max=x_crop_aug_color.shape[1]),
                            self.clip_number(search_bbox_aug[0].x2, _max=x_crop_aug_color.shape[0]),
@@ -195,16 +197,16 @@ class USOTTracker(object):
                scale_z, p, template_mem=None, score_mem=None):
 
         # Track with the model
-        # cls_score, bbox_pred, cls_memory, xf, corr = net.track(x_crops_color, x_crops_ir, template_mem=template_mem, score_mem=score_mem)
-        cls_score, bbox_pred, cls_memory, xf = net.track(x_crops_color, x_crops_ir, template_mem=template_mem,
-                                                               score_mem=score_mem)
+        cls_score, bbox_pred, cls_memory, xf, corr = net.track(x_crops_color, x_crops_ir, template_mem=template_mem, score_mem=score_mem)
+        # cls_score, bbox_pred, cls_memory, xf = net.track(x_crops_color, x_crops_ir, template_mem=template_mem,
+        #                                                        score_mem=score_mem)
         cls_score = F.sigmoid(cls_score).squeeze().cpu().data.numpy()
         cls_memory = F.sigmoid(cls_memory).squeeze().cpu().data.numpy()
-        # corr = F.sigmoid(corr).squeeze().cpu().data.numpy()
-        # corr = cv2.resize(corr, (cls_score.shape[0], cls_score.shape[1]))
+        corr = F.sigmoid(corr).squeeze().cpu().data.numpy()
+        corr = cv2.resize(corr, (cls_score.shape[0], cls_score.shape[1]))
         # Aggregate online cls module and offline cls module
-        cls_score = p.ratio * cls_score + (1 - p.ratio) * cls_memory
-        # cls_score = 0.15 * cls_score + 0.7 * cls_memory + 0.15 * corr
+        # cls_score = p.ratio * cls_score + (1 - p.ratio) * cls_memory
+        cls_score = 0.15 * cls_score + 0.7 * cls_memory + 0.15 * corr
 
         # The bbox predicted
         bbox_pred = bbox_pred.squeeze().cpu().data.numpy()

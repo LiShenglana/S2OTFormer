@@ -319,14 +319,14 @@ def usot_train(args, wandb, train_loader, model, optimizer, epoch,
             cls_ratio = cls_ratios_list[-1]
 
         # Model forward logic
-        cls_loss_ori, cls_loss_memory, reg_loss = model(template_color, search_color, template_ir, search_ir, label_cls,
+        cls_loss_ori, cls_loss_memory, reg_loss, correlation_loss = model(template_color, search_color, template_ir, search_ir, label_cls,
                                                         reg_target=reg_label, reg_weight=reg_weight,
                                                         template_bbox=template_bbox, search_memory_color=search_memory_color,
                                                         search_memory_ir=search_memory_ir, search_bbox=search_bbox, cls_ratio=cls_ratio, label2=label2)
         # Offline cls loss and bbox regression loss
         cls_loss_ori = torch.mean(cls_loss_ori)
         reg_loss = torch.mean(reg_loss)
-        # correlation_loss = torch.mean(correlation_loss)
+        correlation_loss = torch.mean(correlation_loss)
 
         if cls_loss_memory is not None:
             # With cycle memory
@@ -354,11 +354,11 @@ def usot_train(args, wandb, train_loader, model, optimizer, epoch,
         else:
             # Without cycle memory
             cls_loss_memory = 0
-            # if correlation_loss is not None:
-            #     loss = cfg.USOT.TRAIN.LAMBDA_1_NAIVE * (cls_loss_ori) + 1.0 * reg_loss + 0.2 * correlation_loss
-            # else:
-            #     # Loss for naive Siamese training
-            loss = cfg.USOT.TRAIN.LAMBDA_1_NAIVE * cls_loss_ori + 1.0 * reg_loss
+            if correlation_loss is not None:
+                loss = cfg.USOT.TRAIN.LAMBDA_1_NAIVE * (cls_loss_ori) + 1.0 * reg_loss + 0.2 * correlation_loss
+            else:
+                # Loss for naive Siamese training
+                loss = cfg.USOT.TRAIN.LAMBDA_1_NAIVE * cls_loss_ori + 1.0 * reg_loss
 
         loss = torch.mean(loss)
 
@@ -389,20 +389,20 @@ def usot_train(args, wandb, train_loader, model, optimizer, epoch,
         reg_loss = reg_loss.item()
         reg_losses.update(reg_loss, template_color.size(0))
 
-        # try:
-        #     correlation_loss = correlation_loss.item()
-        # except:
-        #     correlation_loss = 0
-        # correlation_losses.update(correlation_loss, template_color.size(0))
+        try:
+            correlation_loss = correlation_loss.item()
+        except:
+            correlation_loss = 0
+        correlation_losses.update(correlation_loss, template_color.size(0))
 
         batch_time.update(time.time() - end)
         end = time.time()
 
         if (iter + 1) % cfg.PRINT_FREQ == 0:
             logger.info(
-                'Epoch: [{0}][{1}/{2}] lr: {lr:.7f}\t Batch Time: {batch_time.avg:.3f}s \t Data Time:{data_time.avg:.3f}s \t CLS_ORI Loss:{cls_loss_ori.avg:.5f} \t CLS_MEMORY Loss:{cls_loss_memory.avg:.5f} \t REG Loss:{reg_loss.avg:.5f} \t Loss:{loss.avg:.5f}'.format(
+                'Epoch: [{0}][{1}/{2}] lr: {lr:.7f}\t Batch Time: {batch_time.avg:.3f}s \t Data Time:{data_time.avg:.3f}s \t CLS_ORI Loss:{cls_loss_ori.avg:.5f} \t CLS_MEMORY Loss:{cls_loss_memory.avg:.5f} \t REG Loss:{reg_loss.avg:.5f} \t CORR Loss:{corr_loss.avg:.5f} \t Loss:{loss.avg:.5f}'.format(
                     epoch, iter + 1, len(train_loader), lr=cur_lr, batch_time=batch_time, data_time=data_time,
-                    loss=losses, cls_loss_ori=cls_losses_ori, cls_loss_memory=cls_losses_memory, reg_loss=reg_losses))
+                    loss=losses, cls_loss_ori=cls_losses_ori, cls_loss_memory=cls_losses_memory, corr_loss=correlation_losses, reg_loss=reg_losses))
 
             print_speed((epoch - 1) * len(train_loader) + iter + 1, batch_time.avg,
                         cfg.USOT.TRAIN.END_EPOCH * len(train_loader), logger)

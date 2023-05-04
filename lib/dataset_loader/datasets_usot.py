@@ -457,18 +457,14 @@ class USOTDataset(Dataset):
         #     memory_aug_seq = self.memory_aug_seq.to_deterministic()
         #     image_color_aug, bbs_aug = memory_aug_seq(image=image_color, bounding_boxes=bbs)
         #     image_ir_aug = memory_aug_seq(image=image_ir)
+        #     # ia.imshow(np.hstack([bbs_aug.draw_on_image(image_color_aug), bbs_aug.draw_on_image(image_ir_aug)]))
         # bbox = Corner(self.clip_number(bbs_aug[0].x1, _max=image_color_aug.shape[0]),
         #               self.clip_number(bbs_aug[0].y1, _max=image_color_aug.shape[1]),
         #               self.clip_number(bbs_aug[0].x2, _max=image_color_aug.shape[0]),
         #               self.clip_number(bbs_aug[0].y2, _max=image_color_aug.shape[1]))
         #
-        # # return images[0], images[1], bbox, param
         # return image_color_aug, image_ir_aug, bbox, param
-        # bbs = [
-        #     [BoundingBox(x1=bbox.x1, y1=bbox.y1, x2=bbox.x2, y2=bbox.y2)],
-        #     [BoundingBox(x1=bbox.x1, y1=bbox.y1, x2=bbox.x2, y2=bbox.y2),
-        #      BoundingBox(x1=bbox.x1, y1=bbox.y1, x2=bbox.x2, y2=bbox.y2)]
-        # ]
+
         # images =[image_color, image_ir]
         images = torch.cat((torch.tensor(image_color).unsqueeze(0), torch.tensor(image_ir).unsqueeze(0)), 0).numpy()  #[2,128,128,3]
         if not search:
@@ -483,6 +479,8 @@ class USOTDataset(Dataset):
         else:
             # Augmentation for memory search areas
             images, bbs_aug = self.memory_aug_seq(images=images, bounding_boxes=bbs)
+            # ia.imshow(np.hstack([bbs.draw_on_image(images[0]), bbs.draw_on_image(images[1])]))
+            # ia.imshow(np.hstack([bbs_aug.draw_on_image(images[0]), bbs_aug.draw_on_image(images[1])]))
             # image_ir, _ = self.memory_aug_seq(image=image_ir, bounding_boxes=bbs)
 
         # image_color = torch.chunk(torch.tensor(image_cat), 2, 2)[0].numpy()
@@ -494,7 +492,6 @@ class USOTDataset(Dataset):
                       self.clip_number(bbs_aug[0].y2, _max=images[0].shape[1]))
 
         return images[0], images[1], bbox, param
-        # return image_color, image_ir, bbox, param
 
     def _dynamic_label(self, fixedLabelSize, c_shift, rPos=2, rNeg=0):
         """

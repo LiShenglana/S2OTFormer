@@ -334,20 +334,16 @@ class USOT_(nn.Module):
         if self.modality == 'RGB-T':
             _, xf_color = self.backbone_net_RGB(x_color)
             _, xf_ir = self.backbone_net_T(x_ir)
-            # PrPool the template feature and down-sample the deep features
-            # if self.neck is not None:
-            #     xf_color = self.neck(xf_color)
-            #     xf_ir = self.neck(xf_ir)
             if self.fuse_method == 'Add':
                 xf = torch.add(xf_color, xf_ir)
             elif self.fuse_method == 'Cross_Attention':
                 _, _, _, Wx = xf_color.shape
                 xf_cat = torch.cat((xf_color, xf_ir), 1)
-                # if self.vis_attn:
-                #     attn_weights = []
-                #     hooks = []
-                #     hooks.append(self.featurefusion_network.encoder.layers[0].multihead_attn1.register_forward_hook(
-                #             lambda self, input, output: attn_weights.append(output)))
+                if self.vis_attn:
+                    attn_weights = []
+                    hooks = []
+                    hooks.append(self.featurefusion_network.encoder.layers[0].multihead_attn1.register_forward_hook(
+                            lambda self, input, output: attn_weights.append(output)))
                 xf_att = self.featurefusion_network(self.input_proj1(xf_cat), self.input_proj2(xf_color),
                                                     self.input_proj2(xf_ir), Wx)
                 xf = torch.add(self.input_proj2(xf_color), self.input_proj2(xf_ir))
@@ -355,15 +351,9 @@ class USOT_(nn.Module):
         elif self.modality == 'RGB':
             _, xf_color = self.backbone_net_RGB(x_color)
             xf = xf_color
-            # PrPool the template feature and down-sample the deep features
-            # if self.neck is not None:
-            #     xf = self.neck(xf_color)
         elif self.modality == 'T':
             _, xf_ir = self.backbone_net_T(x_ir)
             xf = xf_ir
-            # PrPool the template feature and down-sample the deep features
-            # if self.neck is not None:
-            #     xf = self.neck(xf_ir)
 
         # elif self.cfg.MODEL.BACKBONE.Feature_Backbone == 'Vit':
         #     xf = self.feature_extractor(x_ir, x_color, temp=False)
@@ -382,9 +372,9 @@ class USOT_(nn.Module):
             bbox_pred, cls_pred, cls_feature, reg_feature, cls_memory_pred = self.connect_model(xf, kernel=self.zf,
                                                                                                 memory_kernel=template_mem,
                                                                                                 memory_confidence=score_mem)
-            # corr = self.correlation(xf_att, self.zf_att)
-            # corr = self.class_embed(corr)
-            # corr = self.change(corr, xf_att.shape[3])
+            corr = self.correlation(xf_att, self.zf_att)
+            corr = self.class_embed(corr)
+            corr = self.change(corr, xf_att.shape[3])
             # cls_pred = cls_pred.squeeze(0)
             # c, h, w = cls_pred.size()
             # mask = torch.zeros((c, h, w)).cuda()
@@ -396,13 +386,14 @@ class USOT_(nn.Module):
             # cls_pred = cls_pred * mask
             # cls_pred = cls_pred.unsqueeze(0)
 
-            # if self.vis_attn:
-            #     for hook in hooks:
-            #         hook.remove()
-            #     vis_attn_maps(attn_weights, q_w=8, k_w=4, skip_len=16, x1=self.input_proj1(xf_cat), x2=self.input_proj2(xf_color),
-            #                 x1_title='cat', x2_title='color',
-            #                 save_path='vis_attn_weights/t2ot_vis/%04d' % 1)
-            #     print("save vis_attn of frame-{} done.".format(1))
+            if self.vis_attn:
+                for hook in hooks:
+                    hook.remove()
+                # attn_weights = attn_weights[0][0]
+                vis_attn_maps(attn_weights[0][1], q_w=31, k_w=31, skip_len=31, x1=x_color, x2=x_ir,
+                            x1_title='color', x2_title='ir',
+                            save_path='vis_attn_weights/t2ot_vis/%04d' % 1)
+                print("save vis_attn of frame-{} done.".format(1))
 
             if self.debug:
                 if self.use_visdom:
@@ -418,8 +409,8 @@ class USOT_(nn.Module):
                             break
 
             # Here xf is the feature of search areas which will be cropped soon according to the final bbox
-            # return cls_pred, bbox_pred, cls_memory_pred, xf, corr
-            return cls_pred, bbox_pred, cls_memory_pred, xf
+            return cls_pred, bbox_pred, cls_memory_pred, xf, corr
+            # return cls_pred, bbox_pred, cls_memory_pred, xf
         else:
             # Track with offline module only
             bbox_pred, cls_pred, _, _, _ = self.connect_model(xf, kernel=self.zf)
@@ -650,12 +641,9 @@ class USOT_(nn.Module):
         else:
             # The following logic is for purely offline naive Siamese training
             bbox_pred, cls_pred, _, _, _ = self.connect_model(xf, kernel=zf)
-            # corr = self.correlation(xf_att, zf_att)
-            # corr = self.change(self.class_embed(corr), w=31)
-            # correlation_loss = self._weighted_BCE(corr, label2)
-            # empty_weight = torch.ones(2)
-            # empty_weight[-1] = 0.0625
-            # correlation_loss = F.cross_entropy(corr.transpose(1, 2), label2, self.empty_weight)
+            corr = self.correlation(xf_att, zf_att)
+            corr = self.change(self.class_embed(corr), w=31)
+            correlation_loss = self._weighted_BCE(corr, label2)
 
             # for index in range(cls_pred.shape[0]):
             #     c, h, w = cls_pred[index].size()
@@ -673,7 +661,7 @@ class USOT_(nn.Module):
                 if self.use_visdom:
                     for index in range(cls_pred.shape[0]):
                         self.visdom.register(cls_pred[index].view(25, 25), 'heatmap', 1, 'score_map_train')
-                        # self.visdom.register(corr[index].view(31, 31), 'heatmap', 1, 'corr')
+                        self.visdom.register(corr[index].view(31, 31), 'heatmap', 1, 'corr')
                         self.visdom.register(label[index].view(25, 25), 'heatmap', 1, 'label_map_train')
                         self.visdom.register(np.squeeze(template_color[index], 0), 'image', 1, 'template_color')
                         self.visdom.register(np.squeeze(search_color[index], 0), 'image', 1, 'search_color')
@@ -689,8 +677,8 @@ class USOT_(nn.Module):
             reg_loss = self.add_iouloss(bbox_pred, reg_target, reg_weight)
             torch.cuda.empty_cache()
 
-            return cls_loss, None, reg_loss
-            # return cls_loss, None, reg_loss, correlation_loss
+            # return cls_loss, None, reg_loss
+            return cls_loss, None, reg_loss, correlation_loss
 
     def change(self, X=None, w=63):
         opt = (X.permute((1, 3, 0, 2)).contiguous())
@@ -729,13 +717,13 @@ class USOT(USOT_):
                     dim_feedforward=2048,
                     num_featurefusion_layers=1
                 )
-                # self.correlation = Correlation(
-                #     d_model=256,
-                #     dropout=0.1,
-                #     nhead=8,
-                #     dim_feedforward=2048,
-                #     num_featurefusion_layers=1
-                # )
+                self.correlation = Correlation(
+                    d_model=256,
+                    dropout=0.1,
+                    nhead=8,
+                    dim_feedforward=2048,
+                    num_featurefusion_layers=1
+                )
                 # self.selfattention_network = SelfAttention(
                 #     d_model=256,
                 #     dropout=0.1,

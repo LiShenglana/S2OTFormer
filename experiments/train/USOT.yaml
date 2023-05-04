@@ -3,7 +3,7 @@ USOT:
   PRINT_FREQ: 10
   WORKERS: 32
   OUTPUT_DIR: 'var/log'   # Log file
-  CHECKPOINT_DIR: '/home/cscv/Documents/lsl/USOTFormer/scripts/test3/USOTFormer/VOT_train/test/attention_cat_addori_ln_linear_nodownsample_corratt/'   # Checkpoint file
+  CHECKPOINT_DIR: '/home/cscv/Documents/lsl/USOTFormer/scripts/test3/USOTFormer/VOT_train/test/attention_cat_addori_ln_linear_nodownsample_corr/'   # Checkpoint file
 
   TRAIN:
     ISTRUE: True   # Whether to train, used in scripts/onekey_usot.py
@@ -18,7 +18,7 @@ USOT:
     PRETRAIN: '/home/cscv/Documents/lsl/USOT/scripts/pretrain/imagenet_pretrain.model' # 'moco_v2_800.model'
     WARM_POLICY: 'step'
     UNFIX_POLICY: 'log'
-#    RESUME: '/home/cscv/Documents/lsl/USOT-copy/scripts/test2/USOTFormer/attention_cat_addori_ln_linear_mem/checkpoint_e10.pth'
+#    RESUME: '/home/cscv/Documents/lsl/USOTFormer/scripts/test3/USOTFormer/VOT_train/test/attention_cat_addori_ln_linear_nodownsample_membatch/checkpoint_e10.pth'
 
     WARMUP:
       IFNOT: True
