@@ -32,7 +32,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='USOT testing')
     parser.add_argument('--arch', dest='arch', default='USOT', help='backbone architecture')
     parser.add_argument('--resume', default='/home/cscv/Documents/lsl/USOTFormer/scripts/test3/USOTFormer/VOT_train/test/attention_cat_addori_ln_linear_nodownsample_motion/checkpoint_e30.pth', type=str, help='pretrained model')
-    parser.add_argument('--dataset', default='GTOT', choices={'GTOT', 'RGB-T234', 'LasHeR'}, help='dataset test')
+    parser.add_argument('--dataset', default='LasHeR', choices={'GTOT', 'RGB-T234', 'LasHeR'}, help='dataset test')
     parser.add_argument('--epoch_test', default=False, type=bool, help='multi-gpu epoch test flag')
     parser.add_argument('--version', default='v1', help='testing style version')
     #parser.add_argument('--Feature_Backbone', type=str, choices=['ResNet', 'Vit'], default='Vit')
