@@ -206,7 +206,8 @@ def build_opt_lr(cfg, model, current_epoch=1):
                               'lr': cfg.USOT.TRAIN.BASE_LR}]
         trainable_params += [{'params': model.input_proj2.parameters(),
                               'lr': cfg.USOT.TRAIN.BASE_LR}]
-
+        trainable_params += [{'params': model.motion_proj.parameters(),
+                              'lr': cfg.USOT.TRAIN.BASE_LR}]
     except:
         pass
 
@@ -484,7 +485,7 @@ def main():
 
         if epoch >= config.USOT.TRAIN.MEMORY_EPOCH:
             # Training with cycle memory scheme
-            train_set.cycle_memory = False
+            train_set.cycle_memory = True
             train_loader = DataLoader(train_set, batch_size=config.USOT.TRAIN.BATCH_STAGE_2 * gpu_num,
                                       num_workers=config.WORKERS,
                                       pin_memory=True, sampler=None, drop_last=True)

@@ -53,7 +53,7 @@ class Correlation(nn.Module):
                                                   pos_src1=pos_temp,
                                                   pos_src2=pos_search)
 
-        return hs.unsqueeze(0).transpose(1, 2)
+        return hs[0].unsqueeze(0).transpose(1, 2), hs[1]
 
 
 class Encoder(nn.Module):
@@ -99,6 +99,7 @@ class FeatureFusionLayer(nn.Module):
         self.norm13 = nn.LayerNorm(d_model)
         # self.norm21 = nn.LayerNorm(d_model)
         # self.dropout11 = nn.Dropout(dropout)
+        self.attn_drop = nn.Dropout(dropout)
         self.dropout12 = nn.Dropout(dropout)
         self.dropout13 = nn.Dropout(dropout)
         # self.dropout21 = nn.Dropout(dropout)
@@ -121,18 +122,18 @@ class FeatureFusionLayer(nn.Module):
         # src1 = src1 + self.dropout11(src12)
         # src1 = self.norm11(src1)
 
-        src12 = self.multihead_attn1(query=self.with_pos_embed(src1, pos_src1),
+        src12, src_weight = self.multihead_attn1(query=self.with_pos_embed(src1, pos_src1),
                                    key=self.with_pos_embed(src2, pos_src2),
                                    value=src2, attn_mask=src2_mask,
-                                   key_padding_mask=src2_key_padding_mask)[0]
-
+                                   key_padding_mask=src2_key_padding_mask)
+        src_weight = self.attn_drop(src_weight)
         src1 = src1 + self.dropout12(src12)
         src1 = self.norm12(src1)
         src12 = self.linear12(self.dropout1(self.activation1(self.linear11(src1))))
         src1 = src1 + self.dropout13(src12)
         src1 = self.norm13(src1)
 
-        return src1
+        return src1, src_weight
 
     def forward(self, src1, src2,
                 src1_mask: Optional[Tensor] = None,

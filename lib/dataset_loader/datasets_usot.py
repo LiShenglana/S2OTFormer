@@ -86,9 +86,9 @@ class USOTDataset(Dataset):
 
         # Augmentation for memory search areas
         self.memory_aug_seq = iaa.Sequential([
-            iaa.Fliplr(0.4), #0.4
-            iaa.Flipud(0.2), #0.2
-            iaa.PerspectiveTransform(scale=(0.01, 0.15)),
+            # iaa.Fliplr(0.4), #0.4
+            # iaa.Flipud(0.2), #0.2
+            # iaa.PerspectiveTransform(scale=(0.01, 0.15)),
             iaa.MultiplyHueAndSaturation((0.5, 1.5), per_channel=True),
             iaa.MultiplyBrightness((0.5, 1.5)),
             iaa.MotionBlur(k=(3, 9), angle=[-60, 60]),

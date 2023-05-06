@@ -7,7 +7,7 @@
 import cv2
 import os
 from lib.vis.visdom_cus import Visdom
-from lib.models.connect import AdjustLayer, box_tower_reg, Project
+from lib.models.connect import AdjustLayer, box_tower_reg, OverlapPatchEmbed
 from lib.models.backbones import ResNet50
 from lib.models.prroi_pool.functional import prroi_pool2d
 import torch
@@ -42,6 +42,7 @@ class USOT_(nn.Module):
         self.zf_color = None
         self.zf_ir = None
         self.criterion = nn.BCEWithLogitsLoss()
+        self.MSE_loss = nn.MSELoss()
         self.neck = None
         self.project = None
         self.search_size = search_size
@@ -54,6 +55,7 @@ class USOT_(nn.Module):
         self.correlation = None
         self.class_embed = None
         self.bbox_embed = None
+        self.cor = {}
         self.debug = True
         self.use_visdom = False
         self.vis_attn = False
@@ -372,7 +374,7 @@ class USOT_(nn.Module):
             bbox_pred, cls_pred, cls_feature, reg_feature, cls_memory_pred = self.connect_model(xf, kernel=self.zf,
                                                                                                 memory_kernel=template_mem,
                                                                                                 memory_confidence=score_mem)
-            corr = self.correlation(xf_att, self.zf_att)
+            corr, _ = self.correlation(xf_att, self.zf_att)
             corr = self.class_embed(corr)
             corr = self.change(corr, xf_att.shape[3])
             # cls_pred = cls_pred.squeeze(0)
@@ -390,7 +392,7 @@ class USOT_(nn.Module):
                 for hook in hooks:
                     hook.remove()
                 # attn_weights = attn_weights[0][0]
-                vis_attn_maps(attn_weights[0][1], q_w=31, k_w=31, skip_len=31, x1=x_color, x2=x_ir,
+                vis_attn_maps(attn_weights[0][1], q_w=xf_color.shape[2], k_w=xf_ir.shape[2], skip_len=31, x1=x_color, x2=x_ir,
                             x1_title='color', x2_title='ir',
                             save_path='vis_attn_weights/t2ot_vis/%04d' % 1)
                 print("save vis_attn of frame-{} done.".format(1))
@@ -543,11 +545,11 @@ class USOT_(nn.Module):
 
             xf_mem = self.neck(xf_mem, crop=False)
             # Prepare feature for mem_forward_cls (forward tracking with the online module)
-            search_pooled_feature = self.prpool_feature(xf, search_bbox)
-            batch, cspf, wspf, hspf = search_pooled_feature.shape
-            search_pooled_feature = search_pooled_feature.view(batch, 1, cspf, wspf, hspf)
-            search_pooled_feature = search_pooled_feature.repeat(1, mem_size, 1, 1, 1)
-            search_pooled_feature = search_pooled_feature.view(-1, cspf, wspf, hspf)
+            # search_pooled_feature = self.prpool_feature(xf, search_bbox)
+            # batch, cspf, wspf, hspf = search_pooled_feature.shape
+            # search_pooled_feature = search_pooled_feature.view(batch, 1, cspf, wspf, hspf)
+            # search_pooled_feature = search_pooled_feature.repeat(1, mem_size, 1, 1, 1)
+            # search_pooled_feature = search_pooled_feature.view(-1, cspf, wspf, hspf)
 
             # batch, cspf, wspf, hspf = xf_att.shape
             # search_feature_att = xf_att.view(batch, 1, cspf, wspf, hspf)
@@ -555,93 +557,113 @@ class USOT_(nn.Module):
             # search_feature_att = search_feature_att.view(-1, cspf, wspf, hspf)
 
             # Repeat the original template
-            batch, cz, hz, wz = zf.shape
-            zf_mem = zf.view(batch, 1, cz, hz, wz)
-            zf_mem = zf_mem.repeat(1, mem_size, 1, 1, 1)
-            zf_mem = zf_mem.view(-1, cz, hz, wz)
+            # batch, cz, hz, wz = zf.shape
+            # zf_mem = zf.view(batch, 1, cz, hz, wz)
+            # zf_mem = zf_mem.repeat(1, mem_size, 1, 1, 1)
+            # zf_mem = zf_mem.view(-1, cz, hz, wz)
 
-            # batch, cz, hz, wz = zf_att.shape
-            # zf_mem_att = zf_att.view(batch, 1, cz, hz, wz)
-            # zf_mem_att = zf_mem_att.repeat(1, mem_size, 1, 1, 1)
-            # zf_mem_att = zf_mem_att.view(-1, cz, hz, wz)
+            batch, cz, hz, wz = zf_att.shape
+            zf_mem_att = zf_att.view(batch, 1, cz, hz, wz)
+            zf_mem_att = zf_mem_att.repeat(1, mem_size, 1, 1, 1)
+            zf_mem_att = zf_mem_att.view(-1, cz, hz, wz)
 
             # Get the intermediate target bbox and cls score in memory search areas (tracking with offline module)
-            off_forward_bbox, off_forward_cls, forward_x_store, _, _ = self.connect_model(xf_mem, kernel=zf_mem)
-
-            # corr_off = self.correlation(xf_mem_att, zf_mem_att)
+            # off_forward_bbox, off_forward_cls, forward_x_store, _, _ = self.connect_model(xf_mem, kernel=zf_mem)
+            #get the motion features
+            corr_mem, attn = self.correlation(xf_mem_att, zf_mem_att)
+            # corr = self.change(self.class_embed(corr_off), w=31)
+            # correlation_loss = self._weighted_BCE(corr, label2)
+            cor_z = self.get_cor((zf_mem_att.shape[0], zf_mem_att.shape[2], zf_mem_att.shape[3]), zf_mem_att.device)
+            cor_x = self.get_cor((xf_mem_att.shape[0], xf_mem_att.shape[2], xf_mem_att.shape[3]), xf_mem_att.device)
+            cor_x = cor_x.reshape(xf_mem_att.shape[0], xf_mem_att.shape[2] * xf_mem_att.shape[3], 2)
+            cor_z = cor_z.reshape(zf_mem_att.shape[0], zf_mem_att.shape[2] * zf_mem_att.shape[3], 2)
+            cor_pre = torch.bmm(attn, cor_z)
+            motion = (cor_pre - cor_x).permute(0, 2, 1) #24, 2, 961
+            motion = self.motion_proj(motion).permute(0, 2, 1).mean(dim=0).squeeze().view(xf_mem_att.shape[2], xf_mem_att.shape[3], 2)
+            #through the motion features to get the ori cor
+            cor_z_off = self.get_cor((zf_att.shape[0], zf_att.shape[2], zf_att.shape[3]), zf_att.device)
+            cor_z_off = cor_z_off.reshape(zf_att.shape[0], zf_att.shape[2] * zf_att.shape[3], 2)
+            cor_x_off = self.get_cor((xf_att.shape[0], xf_att.shape[2], xf_att.shape[3]), xf_att.device)
+            cor_x_off_pre = cor_x_off + motion
+            _, attn_off = self.correlation(xf_att, zf_att)
+            target = attn_off @ cor_z_off
+            motion_loss = self.MSE_loss(cor_x_off_pre.reshape(cor_x_off_pre.shape[0], cor_x_off_pre.shape[1] * cor_x_off_pre.shape[2], 2), target)
+            # corr_off_win = self.window_partition(corr_off)
+            # xf_mem_att_win = self.window_partition(xf_mem_att)
+            # motion_ = self.motion_proj(corr_off_win - xf_mem_att_win)
             # corr_off = self.change(self.class_embed(corr_off), w=31)
             # correlation_loss_off = self._weighted_BCE(corr_off, label2)
 
             # Get the mem_forward_cls score in memory search areas (tracking with online module)
-            fake_confidence = torch.ones(batch * mem_size, 1)
-            _, _, _, _, mem_forward_cls = self.connect_model(xf_mem, memory_kernel=search_pooled_feature,
-                                                             memory_confidence=fake_confidence,
-                                                             cls_x_store=forward_x_store)
+            # fake_confidence = torch.ones(batch * mem_size, 1)
+            # _, _, _, _, mem_forward_cls = self.connect_model(xf_mem, memory_kernel=search_pooled_feature,
+            #                                                  memory_confidence=fake_confidence,
+            #                                                  cls_x_store=forward_x_store)
             # corr_mem = self.correlation(xf_mem_att, search_feature_att)
             # corr_mem = self.change(self.class_embed(corr_mem), w=31)
             # Resize_to = transforms.Resize([mem_forward_cls.shape[2], mem_forward_cls.shape[3]])
             # corr_mem = Resize_to(corr_mem)
             # corr_off = Resize_to(corr_off)
 
-            mem_forward_cls = mem_forward_cls.view(batch, mem_size, -1)
-            off_forward_cls = off_forward_cls.view(batch, mem_size, -1)
+            # mem_forward_cls = mem_forward_cls.view(batch, mem_size, -1)
+            # off_forward_cls = off_forward_cls.view(batch, mem_size, -1)
             # corr_mem = corr_mem.view(batch, mem_size, -1)
             # corr_off = corr_off.view(batch, mem_size, -1)
 
             # Linearly combine off_forward_cls and mem_forward_cls as the forward response map
             # Note: weighted add memory_forward_cls and off_forward_cls, while bbox remains
             # forward_res_map = cls_ratio * (off_forward_cls + corr_off) + (1 - cls_ratio) * (mem_forward_cls + corr_mem)
-            forward_res_map = cls_ratio * off_forward_cls + (1 - cls_ratio) * mem_forward_cls
-            best_forward_cls = forward_res_map.max(dim=2)
-            best_forward_cls_argmax = best_forward_cls.indices.view(batch, mem_size, 1, 1)
-            best_forward_cls_argmax = best_forward_cls_argmax.repeat(1, 1, 1, 4)
-            bbox_pred_to_img = self.pred_offset_to_image_bbox(off_forward_bbox, batch)
-            bbox_pred_to_img = bbox_pred_to_img.view(batch, mem_size, 4, -1).transpose(2, 3)
-            best_mem_bbox = torch.gather(bbox_pred_to_img, dim=2,
-                                         index=best_forward_cls_argmax).view(batch * mem_size, 4)
-            best_forward_cls_score = best_forward_cls.values.detach()
-            best_forward_bbox_pool = self.image_bbox_to_prpool_bbox(best_mem_bbox).detach()
-
-            # PrPool intermediate features from memory search areas as the memory queue
-            pooled_mem_features = self.prpool_feature(xf_mem, best_forward_bbox_pool) #[48, 256, 7, 7]
-
-            #self-attentin between memory features as time attention
-            # _, _, _, W = pooled_mem_features.shape
-            # pooled_mem_features_att = self.selfattention_network(pooled_mem_features, W)
-            # Backward track from memory queue to the search area in the template frame
-            _, _, _, _, backward_res_map = self.connect_model(xf, memory_kernel=pooled_mem_features,
-                                                              memory_confidence=best_forward_cls_score,
-                                                              cls_x_store=cls_x)  #[6, 1, 25, 25] xf_mem[24,256,31,31]
-            if self.debug:
-                if self.use_visdom:
-                    for index in range(label.shape[0]):
-                        self.visdom.register(backward_res_map[index].view(backward_res_map.shape[2], backward_res_map.shape[3]), 'heatmap', 1, 'backward_res_map')
-                        self.visdom.register(cls_pred[index].view(25, 25), 'heatmap', 1, 'score_map_train')
-                        # self.visdom.register(corr[index].view(31, 31), 'heatmap', 1, 'corr')
-                        self.visdom.register(label[index].view(25, 25), 'heatmap', 1, 'label_map_train')
-                        self.visdom.register(np.squeeze(search_memory_color[index], 0), 'image', 1,
-                                             'search_memory_color')
-                        self.visdom.register(np.squeeze(search_memory_ir[index], 0), 'image', 1, 'search_memory_ir')
-                        self.visdom.register(np.squeeze(template_color[index], 0), 'image', 1, 'template_color')
-                        self.visdom.register(np.squeeze(template_ir[index], 0), 'image', 1, 'template_ir')
-                        self.visdom.register(np.squeeze(search_color[index], 0), 'image', 1, 'search_color')
-                        self.visdom.register(np.squeeze(search_ir[index], 0), 'image', 1, 'search_ir')
-
-                    while self.pause_mode:
-                        if self.step:
-                            self.step = False
-                            break
+            # forward_res_map = cls_ratio * off_forward_cls + (1 - cls_ratio) * mem_forward_cls
+            # best_forward_cls = forward_res_map.max(dim=2)
+            # best_forward_cls_argmax = best_forward_cls.indices.view(batch, mem_size, 1, 1)
+            # best_forward_cls_argmax = best_forward_cls_argmax.repeat(1, 1, 1, 4)
+            # bbox_pred_to_img = self.pred_offset_to_image_bbox(off_forward_bbox, batch)
+            # bbox_pred_to_img = bbox_pred_to_img.view(batch, mem_size, 4, -1).transpose(2, 3)
+            # best_mem_bbox = torch.gather(bbox_pred_to_img, dim=2,
+            #                              index=best_forward_cls_argmax).view(batch * mem_size, 4)
+            # best_forward_cls_score = best_forward_cls.values.detach()
+            # best_forward_bbox_pool = self.image_bbox_to_prpool_bbox(best_mem_bbox).detach()
+            #
+            # # PrPool intermediate features from memory search areas as the memory queue
+            # pooled_mem_features = self.prpool_feature(xf_mem, best_forward_bbox_pool) #[48, 256, 7, 7]
+            #
+            # #self-attentin between memory features as time attention
+            # # _, _, _, W = pooled_mem_features.shape
+            # # pooled_mem_features_att = self.selfattention_network(pooled_mem_features, W)
+            # # Backward track from memory queue to the search area in the template frame
+            # _, _, _, _, backward_res_map = self.connect_model(xf, memory_kernel=pooled_mem_features,
+            #                                                   memory_confidence=best_forward_cls_score,
+            #                                                   cls_x_store=cls_x)  #[6, 1, 25, 25] xf_mem[24,256,31,31]
+            # if self.debug:
+            #     if self.use_visdom:
+            #         for index in range(label.shape[0]):
+            #             self.visdom.register(backward_res_map[index].view(backward_res_map.shape[2], backward_res_map.shape[3]), 'heatmap', 1, 'backward_res_map')
+            #             self.visdom.register(cls_pred[index].view(25, 25), 'heatmap', 1, 'score_map_train')
+            #             # self.visdom.register(corr[index].view(31, 31), 'heatmap', 1, 'corr')
+            #             self.visdom.register(label[index].view(25, 25), 'heatmap', 1, 'label_map_train')
+            #             self.visdom.register(np.squeeze(search_memory_color[index], 0), 'image', 1,
+            #                                  'search_memory_color')
+            #             self.visdom.register(np.squeeze(search_memory_ir[index], 0), 'image', 1, 'search_memory_ir')
+            #             self.visdom.register(np.squeeze(template_color[index], 0), 'image', 1, 'template_color')
+            #             self.visdom.register(np.squeeze(template_ir[index], 0), 'image', 1, 'template_ir')
+            #             self.visdom.register(np.squeeze(search_color[index], 0), 'image', 1, 'search_color')
+            #             self.visdom.register(np.squeeze(search_ir[index], 0), 'image', 1, 'search_ir')
+            #
+            #         while self.pause_mode:
+            #             if self.step:
+            #                 self.step = False
+            #                 break
 
             # Cycle memory loss is calculated with the same pseudo label as original cls loss
-            cls_memory_loss = self._weighted_BCE(backward_res_map, label)
+            # cls_memory_loss = self._weighted_BCE(backward_res_map, label)
             torch.cuda.empty_cache()
 
-            return cls_loss_ori, cls_memory_loss, reg_loss
-
+            # return cls_loss_ori, cls_memory_loss, reg_loss
+            return cls_loss_ori, _, reg_loss, motion_loss
         else:
             # The following logic is for purely offline naive Siamese training
             bbox_pred, cls_pred, _, _, _ = self.connect_model(xf, kernel=zf)
-            corr = self.correlation(xf_att, zf_att)
+            corr, _ = self.correlation(xf_att, zf_att)
             corr = self.change(self.class_embed(corr), w=31)
             correlation_loss = self._weighted_BCE(corr, label2)
 
@@ -685,6 +707,21 @@ class USOT_(nn.Module):
         bs, Nq, C, HW = opt.size()
         opt_feat = opt.view(-1, C, w, w)
         return opt_feat
+    def window_partition(self, x, window_size=[10, 10]):
+        Resize_to = transforms.Resize([30, 30])
+        x = Resize_to(x)
+        x = x.permute(0, 2, 3, 1)
+        B, H, W, C = x.shape
+        x = x.view(B, H // window_size[0], window_size[0], W // window_size[1], window_size[1], C)
+        windows = (x.permute(0, 1, 3, 2, 4, 5).contiguous().view(-1, window_size[0]*window_size[1], C))
+        return windows
+    def get_cor(self, shape, device):
+        k = (str(shape), str(device))
+        if k not in self.cor:
+            tenHorizontal = torch.linspace(-1.0, 1.0, shape[2], device=device).view(1, 1, 1, shape[2]).expand(shape[0], -1, shape[1], -1).permute(0, 2, 3, 1)
+            tenVertical = torch.linspace(-1.0, 1.0, shape[1], device=device).view(1, 1, shape[1], 1).expand(shape[0], -1, -1, shape[2]).permute(0, 2, 3, 1)
+            self.cor[k] = torch.cat([tenHorizontal, tenVertical], -1).to(device)
+        return self.cor[k]
 
 class MLP(nn.Module):
     """ Very simple multi-layer perceptron (also called FFN)"""
@@ -731,6 +768,8 @@ class USOT(USOT_):
                 #     dim_feedforward=2048,
                 #     num_featurefusion_layers=1
                 # )
+                self.patch_embed = OverlapPatchEmbed(patch_size=3, stride=2, in_chans=256, embed_dim=256)
+                self.motion_proj = nn.Linear(961, 961)
                 self.input_proj1 = nn.Conv2d(2048, 256, kernel_size=1)
                 self.input_proj2 = nn.Conv2d(1024, 256, kernel_size=1)
                 self.neck = AdjustLayer(in_channels=256, out_channels=256, pr_pool=settings['pr_pool'])
