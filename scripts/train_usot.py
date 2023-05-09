@@ -341,7 +341,7 @@ def usot_train(args, wandb, train_loader, model, optimizer, epoch,
             for i_ep in range(len(lambda_shift_epochs) - 1):
                 if lambda_shift_epochs[i_ep] <= epoch <= lambda_shift_epochs[i_ep + 1]:
                     loss = lambda1_list[i_ep] * cls_loss_ori + \
-                           (lambda_total - lambda1_list[i_ep]) * cls_loss_memory + 1.0 * reg_loss
+                           (lambda_total - lambda1_list[i_ep]) * cls_loss_memory + 1.0 * reg_loss + lambda1_list[i_ep] * correlation_loss
                     # loss = lambda1_list[i_ep] * cls_loss_ori + \
                     #        (lambda_total - lambda1_list[i_ep]) * cls_loss_memory + 1.0 * reg_loss
                     done = True
@@ -349,7 +349,7 @@ def usot_train(args, wandb, train_loader, model, optimizer, epoch,
             if not done:
                 # From last epoch in lambda1_list to the final epoch
                 lambda_1 = lambda1_list[-1]
-                loss = lambda_1 * cls_loss_ori + (lambda_total - lambda_1) * cls_loss_memory + 1.0 * reg_loss
+                loss = lambda_1 * cls_loss_ori + (lambda_total - lambda_1) * cls_loss_memory + 1.0 * reg_loss + lambda_1 * correlation_loss
                 # loss = lambda_1 * cls_loss_ori + (
                 #             lambda_total - lambda_1) * cls_loss_memory + 1.0 * reg_loss
         else:

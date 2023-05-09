@@ -8,7 +8,7 @@ USOT:
   TRAIN:
     ISTRUE: True   # Whether to train, used in scripts/onekey_usot.py
     MODEL: "USOT"
-    START_EPOCH: 1
+    START_EPOCH: 6
     END_EPOCH: 30
     TEMPLATE_SIZE: 128 #127
     SEARCH_SIZE: 256 #255
@@ -18,7 +18,7 @@ USOT:
     PRETRAIN: '/home/cscv/Documents/lsl/USOT/scripts/pretrain/imagenet_pretrain.model' # 'moco_v2_800.model'
     WARM_POLICY: 'step'
     UNFIX_POLICY: 'log'
-#    RESUME: '/home/cscv/Documents/lsl/USOTFormer/scripts/test3/USOTFormer/VOT_train/test/attention_cat_addori_ln_linear_nodownsample_membatch/checkpoint_e10.pth'
+    RESUME: '/home/cscv/Documents/lsl/USOTFormer/scripts/test3/USOTFormer/VOT_train/test/attention_cat_addori_ln_linear_nodownsample_cross/checkpoint_e5.pth'
 
     WARMUP:
       IFNOT: True

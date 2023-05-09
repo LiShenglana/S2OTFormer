@@ -575,19 +575,25 @@ class USOT_(nn.Module):
             # correlation_loss = self._weighted_BCE(corr, label2)
             cor_z = self.get_cor((zf_mem_att.shape[0], zf_mem_att.shape[2], zf_mem_att.shape[3]), zf_mem_att.device)
             cor_x = self.get_cor((xf_mem_att.shape[0], xf_mem_att.shape[2], xf_mem_att.shape[3]), xf_mem_att.device)
-            cor_x = cor_x.reshape(xf_mem_att.shape[0], xf_mem_att.shape[2] * xf_mem_att.shape[3], 2)
-            cor_z = cor_z.reshape(zf_mem_att.shape[0], zf_mem_att.shape[2] * zf_mem_att.shape[3], 2)
+            cor_x = torch.flatten(cor_x, 1, 2)
+            cor_z = torch.flatten(cor_z, 1, 2)
             cor_pre = torch.bmm(attn, cor_z)
             motion = (cor_pre - cor_x).permute(0, 2, 1) #24, 2, 961
-            motion = self.motion_proj(motion).permute(0, 2, 1).mean(dim=0).squeeze().view(xf_mem_att.shape[2], xf_mem_att.shape[3], 2)
+            motion = motion.view(-1, mem_size, 2, motion.shape[2])  #6, 4, 2, 961
+            motion_ = torch.roll(motion, 1, dims=1)
+            motion_[:, :1, :, :] = 0
+            motion = motion - motion_  #6, 4, 2, 961
+            # self-attentin between memory features as time attention
+            # motion_attn = self.selfattention_network(motion, xf_mem_att.shape[2])
+            motion = self.motion_proj(motion).mean(1).squeeze().view(motion.shape[0], xf_mem_att.shape[2], xf_mem_att.shape[3], 2)
             #through the motion features to get the ori cor
             cor_z_off = self.get_cor((zf_att.shape[0], zf_att.shape[2], zf_att.shape[3]), zf_att.device)
-            cor_z_off = cor_z_off.reshape(zf_att.shape[0], zf_att.shape[2] * zf_att.shape[3], 2)
+            cor_z_off = torch.flatten(cor_z_off, 1, 2)
             cor_x_off = self.get_cor((xf_att.shape[0], xf_att.shape[2], xf_att.shape[3]), xf_att.device)
             cor_x_off_pre = cor_x_off + motion
             _, attn_off = self.correlation(xf_att, zf_att)
             target = attn_off @ cor_z_off
-            motion_loss = self.MSE_loss(cor_x_off_pre.reshape(cor_x_off_pre.shape[0], cor_x_off_pre.shape[1] * cor_x_off_pre.shape[2], 2), target)
+            motion_loss = self.MSE_loss(torch.flatten(cor_x_off_pre, 1, 2), target)
             # corr_off_win = self.window_partition(corr_off)
             # xf_mem_att_win = self.window_partition(xf_mem_att)
             # motion_ = self.motion_proj(corr_off_win - xf_mem_att_win)
@@ -761,13 +767,13 @@ class USOT(USOT_):
                     dim_feedforward=2048,
                     num_featurefusion_layers=1
                 )
-                # self.selfattention_network = SelfAttention(
-                #     d_model=256,
-                #     dropout=0.1,
-                #     nhead=8,
-                #     dim_feedforward=2048,
-                #     num_featurefusion_layers=1
-                # )
+                self.selfattention_network = SelfAttention(
+                    d_model=2,
+                    dropout=0.1,
+                    nhead=1,
+                    dim_feedforward=2048,
+                    num_featurefusion_layers=1
+                )
                 self.patch_embed = OverlapPatchEmbed(patch_size=3, stride=2, in_chans=256, embed_dim=256)
                 self.motion_proj = nn.Linear(961, 961)
                 self.input_proj1 = nn.Conv2d(2048, 256, kernel_size=1)

@@ -36,15 +36,15 @@ class SelfAttention(nn.Module):
 
     def forward(self, src_temp, w):
 
-        src_temp = src_temp.flatten(2).permute(2, 0, 1)
+        src_temp = src_temp.permute(2, 0, 1)
 
         hs = self.encoder(src1=src_temp)
 
-        hs = hs.permute(1, 0, 2)
-        opt = (hs.unsqueeze(-1)).permute((0, 3, 2, 1)).contiguous()
-        bs, Nq, C, HW = opt.size()
-        opt_feat = opt.view(-1, C, w, w)
-        return opt_feat
+        hs = hs.permute(1, 2, 0)
+        # opt = (hs.unsqueeze(-1)).permute((0, 3, 2, 1)).contiguous()
+        # bs, Nq, C, HW = opt.size()
+        # opt_feat = opt.view(-1, C, w, w)
+        return hs
         # return hs.unsqueeze(0).transpose(1, 2), opt_feat
 
 class Encoder(nn.Module):

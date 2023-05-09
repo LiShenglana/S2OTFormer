@@ -776,7 +776,7 @@ class subData(object):
             if 'meta' in frames:
                 frames.remove('meta')
             video_len = len(frames)
-            picked_frame_candidates_s = np.random.choice(video_len, frame_candidate_num, replace=True)
+            picked_frame_candidates_s = np.random.choice(video_len - self.memory_num, frame_candidate_num, replace=True)
 
             # Note that long-term frame quality is slightly different from short-term frame quality
             # For cycle memory, we also give priority to template frames with higher (T_u - T_l) frame intervals
@@ -785,7 +785,6 @@ class subData(object):
                  for cand in picked_frame_candidates_s])
             max_cand_index_s = np.argmax(long_term_frame_quality_s)
             max_cand_frame_s = int(picked_frame_candidates_s[max_cand_index_s])
-
             frame_id_s = frames[max_cand_frame_s]
             frame_id_s_format = '0' * (8 - len(frame_id_s)) + frame_id_s
             if self.data_name == 'VOT2019rgbtir':
@@ -797,19 +796,20 @@ class subData(object):
                 image_path_s_ir = join(self.root, video, 'infrared', "{}.{}.x.jpg".format(frame_id_s, track_id))
 
             # Now begin to sample memory frames from nearby frames of the template frame
-            search_range = np.arange(track_info[frame_id_s][6], track_info[frame_id_s][7] + 1)
-            # First sample (memory_num + far_sample) frames in video fragment determined by DP
-            picked_frame_nearby_s = np.random.choice(search_range, self.memory_num + self.far_sample, replace=True)
-            interval_abs = np.abs(picked_frame_nearby_s - max_cand_frame_s)
-            # Pick memory_num frames "most far from" the template frame (somewhat like hard negative mining?)
-            select_idx = interval_abs.argsort()[::-1][0:self.memory_num]
-            picked_frame_nearby_s = picked_frame_nearby_s[select_idx]
+            # search_range = np.arange(track_info[frame_id_s][6], track_info[frame_id_s][7] + 1)
+            # # First sample (memory_num + far_sample) frames in video fragment determined by DP
+            # picked_frame_nearby_s = np.random.choice(search_range, self.memory_num + self.far_sample, replace=True)
+            # interval_abs = np.abs(picked_frame_nearby_s - max_cand_frame_s)
+            # # Pick memory_num frames "most far from" the template frame (somewhat like hard negative mining?)
+            # select_idx = interval_abs.argsort()[::-1][0:self.memory_num]
+            # picked_frame_nearby_s = picked_frame_nearby_s[select_idx]
 
             # Uncomment here to do statistics for averaged frame interval
             # print(len(search_range)-1)
+            picked_frame_nearby_s = frames[max_cand_frame_s + 1 : max_cand_frame_s + self.memory_num +1]
 
-            frame_id_nearby_s = [frames[int(cand)] for cand in picked_frame_nearby_s]
-            frame_id_nearby_s_format = ['0' * (8 - len(frame_id)) + frame_id for frame_id in frame_id_nearby_s]
+            # frame_id_nearby_s = [frames[int(cand)] for cand in picked_frame_nearby_s]
+            frame_id_nearby_s_format = ['0' * (8 - len(frame_id)) + frame_id for frame_id in picked_frame_nearby_s]
             if self.data_name == 'VOT2019rgbtir':
                 image_path_nearby_s_color = [
                     join(self.root, video, 'color', "{}.{}.x.jpg".format(frame_id[-6:], track_id))
@@ -818,10 +818,10 @@ class subData(object):
                                           for frame_id in frame_id_nearby_s_format]
             elif self.data_name == 'LasHeR':
                 image_path_nearby_s_color = [join(self.root, video, 'visible', "{}.{}.x.jpg".format(frame_id, track_id))
-                                          for frame_id in frame_id_nearby_s]
+                                          for frame_id in picked_frame_nearby_s]
                 image_path_nearby_s_ir = [join(self.root, video, 'infrared', "{}.{}.x.jpg".format(frame_id, track_id))
-                                          for frame_id in frame_id_nearby_s]
-            bbox_nearby_s = [track_info[frame_id][:4] for frame_id in frame_id_nearby_s]
+                                          for frame_id in picked_frame_nearby_s]
+            bbox_nearby_s = [track_info[frame_id][:4] for frame_id in picked_frame_nearby_s]
 
             # Return template frame and memory frames
             return image_path_s_color, image_path_s_ir, track_info[frame_id_s][:4], image_path_nearby_s_color, image_path_nearby_s_ir, bbox_nearby_s
@@ -876,7 +876,7 @@ class subData(object):
         if 'meta' in frames:
             frames.remove('meta')
         video_len = len(frames)
-        picked_frame_candidates_s = np.random.choice(video_len, frame_candidate_num, replace=True)
+        picked_frame_candidates_s = np.random.choice(video_len - self.memory_num, frame_candidate_num, replace=True)
 
         # Note that long-term frame quality is slightly different from short-term frame quality
         # For cycle memory, we also give priority to template frames with higher (T_u - T_l) frame intervals
@@ -895,20 +895,21 @@ class subData(object):
             image_path_s_ir = join(self.root, video, 'infrared', "{}.{}.x.jpg".format(frame_id_s, track_id))
 
         # Now begin to sample memory frames from nearby frames of the template frame
-        search_range = np.arange(track_info[frame_id_s][6], track_info[frame_id_s][7] + 1)
-        # First sample (memory_num + far_sample) frames in video fragment determined by DP
-        picked_frame_nearby_s = np.random.choice(search_range, self.memory_num + self.far_sample, replace=True)
-
-        interval_abs = np.abs(picked_frame_nearby_s - max_cand_frame_s)
-        # Pick memory_num frames "most far from" the template frame (somewhat like hard negative mining?)
-        select_idx = interval_abs.argsort()[::-1][0:self.memory_num]
-        picked_frame_nearby_s = picked_frame_nearby_s[select_idx]
+        # search_range = np.arange(track_info[frame_id_s][6], track_info[frame_id_s][7] + 1)
+        # # First sample (memory_num + far_sample) frames in video fragment determined by DP
+        # picked_frame_nearby_s = np.random.choice(search_range, self.memory_num + self.far_sample, replace=True)
+        #
+        # interval_abs = np.abs(picked_frame_nearby_s - max_cand_frame_s)
+        # # Pick memory_num frames "most far from" the template frame (somewhat like hard negative mining?)
+        # select_idx = interval_abs.argsort()[::-1][0:self.memory_num]
+        # picked_frame_nearby_s = picked_frame_nearby_s[select_idx]
 
         # Uncomment here to do statistics for frame interval
         # print(len(search_range)-1)
+        picked_frame_nearby_s = frames[max_cand_frame_s + 1: max_cand_frame_s + self.memory_num + 1]
 
-        frame_id_nearby_s = [frames[int(cand)] for cand in picked_frame_nearby_s]
-        frame_id_nearby_s_format = ['0' * (8 - len(frame_id)) + frame_id for frame_id in frame_id_nearby_s]
+        # frame_id_nearby_s = [frames[int(cand)] for cand in picked_frame_nearby_s]
+        frame_id_nearby_s_format = ['0' * (8 - len(frame_id)) + frame_id for frame_id in picked_frame_nearby_s]
         if self.data_name == 'VOT2019rgbtir':
             image_path_nearby_s_color = [join(self.root, video, 'color', "{}.{}.x.jpg".format(frame_id[-6:], track_id))
                                          for frame_id in frame_id_nearby_s_format]
@@ -916,10 +917,10 @@ class subData(object):
                                       for frame_id in frame_id_nearby_s_format]
         elif self.data_name == 'LasHeR':
             image_path_nearby_s_color = [join(self.root, video, 'visible', "{}.{}.x.jpg".format(frame_id, track_id))
-                                      for frame_id in frame_id_nearby_s]
+                                      for frame_id in picked_frame_nearby_s]
             image_path_nearby_s_ir = [join(self.root, video, 'infrared', "{}.{}.x.jpg".format(frame_id, track_id))
-                                      for frame_id in frame_id_nearby_s]
-        bbox_nearby_s = [track_info[frame_id][:4] for frame_id in frame_id_nearby_s]
+                                      for frame_id in picked_frame_nearby_s]
+        bbox_nearby_s = [track_info[frame_id][:4] for frame_id in picked_frame_nearby_s]
 
         # Return the template frame and memory frames
         return image_path_s_color, image_path_s_ir, track_info[frame_id_s][:4], image_path_nearby_s_color, image_path_nearby_s_ir, bbox_nearby_s
