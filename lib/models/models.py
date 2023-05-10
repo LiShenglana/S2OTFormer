@@ -583,8 +583,12 @@ class USOT_(nn.Module):
             motion_ = torch.roll(motion, 1, dims=1)
             motion_[:, :1, :, :] = 0
             motion = motion - motion_  #6, 4, 2, 961
+
             # self-attentin between memory features as time attention
+            # motion = motion.view(-1, 2, motion.shape[3])
             # motion_attn = self.selfattention_network(motion, xf_mem_att.shape[2])
+            # motion = motion_attn.view(-1, mem_size, 2, motion_attn.shape[2])
+
             motion = self.motion_proj(motion).mean(1).squeeze().view(motion.shape[0], xf_mem_att.shape[2], xf_mem_att.shape[3], 2)
             #through the motion features to get the ori cor
             cor_z_off = self.get_cor((zf_att.shape[0], zf_att.shape[2], zf_att.shape[3]), zf_att.device)
