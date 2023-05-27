@@ -452,17 +452,6 @@ class USOT_(nn.Module):
         features = self.prpool_feature(xf, search_bbox)
         return features
 
-
-    # def extract_memory_feature(self, ori_x_ir=None, ori_x_color=None, xf=None, search_bbox=None, temp=False):
-    #     # Note that here search bbox is the bbox on the deep feature (not on the original search frame)
-    #     if ori_x_ir is not None:
-    #         xf = self.feature_extractor(ori_x_ir, ori_x_color, temp=temp)
-    #         xf = self.project(xf)
-    #         _, xf = self.feature_extractor_ResNet(xf)
-    #         xf = self.neck(xf, crop=False)
-    #     features = self.prpool_feature(xf, search_bbox)
-    #     return features
-
     def forward(self, template_color, search_color, template_ir, search_ir, label=None, reg_target=None,
                 reg_weight=None, template_bbox=None, search_memory_color=None, search_memory_ir=None,
                 search_bbox=None, cls_ratio=0.40, label2=None):
@@ -598,71 +587,6 @@ class USOT_(nn.Module):
             _, attn_off = self.correlation(xf_att, zf_att)
             target = attn_off @ cor_z_off
             motion_loss = self.MSE_loss(torch.flatten(cor_x_off_pre, 1, 2), target)
-            # corr_off_win = self.window_partition(corr_off)
-            # xf_mem_att_win = self.window_partition(xf_mem_att)
-            # motion_ = self.motion_proj(corr_off_win - xf_mem_att_win)
-            # corr_off = self.change(self.class_embed(corr_off), w=31)
-            # correlation_loss_off = self._weighted_BCE(corr_off, label2)
-
-            # Get the mem_forward_cls score in memory search areas (tracking with online module)
-            # fake_confidence = torch.ones(batch * mem_size, 1)
-            # _, _, _, _, mem_forward_cls = self.connect_model(xf_mem, memory_kernel=search_pooled_feature,
-            #                                                  memory_confidence=fake_confidence,
-            #                                                  cls_x_store=forward_x_store)
-            # corr_mem = self.correlation(xf_mem_att, search_feature_att)
-            # corr_mem = self.change(self.class_embed(corr_mem), w=31)
-            # Resize_to = transforms.Resize([mem_forward_cls.shape[2], mem_forward_cls.shape[3]])
-            # corr_mem = Resize_to(corr_mem)
-            # corr_off = Resize_to(corr_off)
-
-            # mem_forward_cls = mem_forward_cls.view(batch, mem_size, -1)
-            # off_forward_cls = off_forward_cls.view(batch, mem_size, -1)
-            # corr_mem = corr_mem.view(batch, mem_size, -1)
-            # corr_off = corr_off.view(batch, mem_size, -1)
-
-            # Linearly combine off_forward_cls and mem_forward_cls as the forward response map
-            # Note: weighted add memory_forward_cls and off_forward_cls, while bbox remains
-            # forward_res_map = cls_ratio * (off_forward_cls + corr_off) + (1 - cls_ratio) * (mem_forward_cls + corr_mem)
-            # forward_res_map = cls_ratio * off_forward_cls + (1 - cls_ratio) * mem_forward_cls
-            # best_forward_cls = forward_res_map.max(dim=2)
-            # best_forward_cls_argmax = best_forward_cls.indices.view(batch, mem_size, 1, 1)
-            # best_forward_cls_argmax = best_forward_cls_argmax.repeat(1, 1, 1, 4)
-            # bbox_pred_to_img = self.pred_offset_to_image_bbox(off_forward_bbox, batch)
-            # bbox_pred_to_img = bbox_pred_to_img.view(batch, mem_size, 4, -1).transpose(2, 3)
-            # best_mem_bbox = torch.gather(bbox_pred_to_img, dim=2,
-            #                              index=best_forward_cls_argmax).view(batch * mem_size, 4)
-            # best_forward_cls_score = best_forward_cls.values.detach()
-            # best_forward_bbox_pool = self.image_bbox_to_prpool_bbox(best_mem_bbox).detach()
-            #
-            # # PrPool intermediate features from memory search areas as the memory queue
-            # pooled_mem_features = self.prpool_feature(xf_mem, best_forward_bbox_pool) #[48, 256, 7, 7]
-            #
-            # #self-attentin between memory features as time attention
-            # # _, _, _, W = pooled_mem_features.shape
-            # # pooled_mem_features_att = self.selfattention_network(pooled_mem_features, W)
-            # # Backward track from memory queue to the search area in the template frame
-            # _, _, _, _, backward_res_map = self.connect_model(xf, memory_kernel=pooled_mem_features,
-            #                                                   memory_confidence=best_forward_cls_score,
-            #                                                   cls_x_store=cls_x)  #[6, 1, 25, 25] xf_mem[24,256,31,31]
-            # if self.debug:
-            #     if self.use_visdom:
-            #         for index in range(label.shape[0]):
-            #             self.visdom.register(backward_res_map[index].view(backward_res_map.shape[2], backward_res_map.shape[3]), 'heatmap', 1, 'backward_res_map')
-            #             self.visdom.register(cls_pred[index].view(25, 25), 'heatmap', 1, 'score_map_train')
-            #             # self.visdom.register(corr[index].view(31, 31), 'heatmap', 1, 'corr')
-            #             self.visdom.register(label[index].view(25, 25), 'heatmap', 1, 'label_map_train')
-            #             self.visdom.register(np.squeeze(search_memory_color[index], 0), 'image', 1,
-            #                                  'search_memory_color')
-            #             self.visdom.register(np.squeeze(search_memory_ir[index], 0), 'image', 1, 'search_memory_ir')
-            #             self.visdom.register(np.squeeze(template_color[index], 0), 'image', 1, 'template_color')
-            #             self.visdom.register(np.squeeze(template_ir[index], 0), 'image', 1, 'template_ir')
-            #             self.visdom.register(np.squeeze(search_color[index], 0), 'image', 1, 'search_color')
-            #             self.visdom.register(np.squeeze(search_ir[index], 0), 'image', 1, 'search_ir')
-            #
-            #         while self.pause_mode:
-            #             if self.step:
-            #                 self.step = False
-            #                 break
 
             # Cycle memory loss is calculated with the same pseudo label as original cls loss
             # cls_memory_loss = self._weighted_BCE(backward_res_map, label)

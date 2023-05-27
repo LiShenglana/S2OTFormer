@@ -39,7 +39,7 @@ def get_subwindow_tracking(im, pos, model_sz, original_sz, avg_chans,
 
     sz = original_sz
     im_sz = im.shape
-    c = (original_sz+1) / 2
+    c = original_sz / 2
     context_xmin = round(pos[0] - c)
     context_xmax = context_xmin + sz - 1
     context_ymin = round(pos[1] - c)
