@@ -198,6 +198,8 @@ def build_opt_lr(cfg, model, current_epoch=1):
     try:
         trainable_params += [{'params': model.class_embed.parameters(),
                               'lr': cfg.USOT.TRAIN.BASE_LR}]
+        trainable_params += [{'params': model.bbox_embed.parameters(),
+                              'lr': cfg.USOT.TRAIN.BASE_LR}]
     except:
         pass
 
@@ -250,10 +252,11 @@ def usot_train(args, wandb, train_loader, model, optimizer, epoch,
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
-    cls_losses_memory = AverageMeter()
+    motion_losses = AverageMeter()
     cls_losses_ori = AverageMeter()
     reg_losses = AverageMeter()
-    correlation_losses = AverageMeter()
+    Class_aug_losses = AverageMeter()
+    Reg_aug_losses = AverageMeter()
     end = time.time()
 
     # Switching the model to train mode
@@ -279,19 +282,21 @@ def usot_train(args, wandb, train_loader, model, optimizer, epoch,
         label_cls = label_cls.to(device)
         reg_label = input[5].float().to(device)
         reg_weight = input[6].float().to(device)
-        template_bbox = input[7].float().to(device)
+        reg_label2 = input[7].float().to(device)
+        reg_weight2 = input[8].float().to(device)
+        template_bbox = input[9].float().to(device)
 
-        if len(input) >= 10:
+        if len(input) >= 12:
             #Cycle memory training
-            search_memory_color = input[8].to(device)
-            search_memory_ir = input[9].to(device)
-            search_bbox = input[10].to(device)
-            label2 = input[11].type(torch.FloatTensor).to(device)
+            search_memory_color = input[10].to(device)
+            search_memory_ir = input[11].to(device)
+            search_bbox = input[12].to(device)
+            label2 = input[13].type(torch.FloatTensor).to(device)
         else:
             search_memory_color = None
             search_memory_ir = None
             search_bbox = None
-            label2 = input[8].type(torch.FloatTensor).to(device)
+            label2 = input[10].type(torch.FloatTensor).to(device)
 
         # feature_map = search_color
         # feature_map = feature_map.permute(0, 2, 3, 1)
@@ -320,43 +325,44 @@ def usot_train(args, wandb, train_loader, model, optimizer, epoch,
             cls_ratio = cls_ratios_list[-1]
 
         # Model forward logic
-        cls_loss_ori, cls_loss_memory, reg_loss, correlation_loss = model(template_color, search_color, template_ir, search_ir, label_cls,
-                                                        reg_target=reg_label, reg_weight=reg_weight,
+        cls_loss_ori, motion_loss, reg_loss, Class_aug_loss, Reg_aug_loss = model(template_color, search_color, template_ir, search_ir, label_cls,
+                                                        reg_target=reg_label, reg_weight=reg_weight, reg_target2=reg_label2, reg_weight2=reg_weight2,
                                                         template_bbox=template_bbox, search_memory_color=search_memory_color,
                                                         search_memory_ir=search_memory_ir, search_bbox=search_bbox, cls_ratio=cls_ratio, label2=label2)
         # Offline cls loss and bbox regression loss
         cls_loss_ori = torch.mean(cls_loss_ori)
         reg_loss = torch.mean(reg_loss)
-        correlation_loss = torch.mean(correlation_loss)
+        Class_aug_loss = torch.mean(Class_aug_loss)
+        # Reg_aug_loss = torch.mean(Reg_aug_loss)
 
-        if cls_loss_memory is not None:
+        if motion_loss is not None:
+            loss = cfg.USOT.TRAIN.LAMBDA_1_NAIVE * cls_loss_ori + 0.2 * motion_loss + 1.0 * reg_loss + 0.2 * Class_aug_loss
             # With cycle memory
-            cls_loss_memory = torch.mean(cls_loss_memory)
-            done = False
-            # The following codes determines the linear weights for loss function
-            # You can set a dynamic lambda setting by tuning the following configs
-            lambda_shift_epochs = cfg.USOT.TRAIN.LAMBDA_SHIFT_EPOCHS
-            lambda1_list = cfg.USOT.TRAIN.LAMBDA_1_LIST
-            lambda_total = cfg.USOT.TRAIN.LAMBDA_TOTAL
-            for i_ep in range(len(lambda_shift_epochs) - 1):
-                if lambda_shift_epochs[i_ep] <= epoch <= lambda_shift_epochs[i_ep + 1]:
-                    loss = lambda1_list[i_ep] * cls_loss_ori + \
-                           (lambda_total - lambda1_list[i_ep]) * cls_loss_memory + 1.0 * reg_loss + lambda1_list[i_ep] * correlation_loss
-                    # loss = lambda1_list[i_ep] * cls_loss_ori + \
-                    #        (lambda_total - lambda1_list[i_ep]) * cls_loss_memory + 1.0 * reg_loss
-                    done = True
-                    break
-            if not done:
-                # From last epoch in lambda1_list to the final epoch
-                lambda_1 = lambda1_list[-1]
-                loss = lambda_1 * cls_loss_ori + (lambda_total - lambda_1) * cls_loss_memory + 1.0 * reg_loss + lambda_1 * correlation_loss
-                # loss = lambda_1 * cls_loss_ori + (
-                #             lambda_total - lambda_1) * cls_loss_memory + 1.0 * reg_loss
+            # motion_loss = torch.mean(motion_loss)
+            # done = False
+            # # The following codes determines the linear weights for loss function
+            # # You can set a dynamic lambda setting by tuning the following configs
+            # lambda_shift_epochs = cfg.USOT.TRAIN.LAMBDA_SHIFT_EPOCHS
+            # lambda1_list = cfg.USOT.TRAIN.LAMBDA_1_LIST
+            # lambda_total = cfg.USOT.TRAIN.LAMBDA_TOTAL
+            # for i_ep in range(len(lambda_shift_epochs) - 1):
+            #     if lambda_shift_epochs[i_ep] <= epoch <= lambda_shift_epochs[i_ep + 1]:
+            #         # loss = lambda1_list[i_ep] * cls_loss_ori + \
+            #         #        (lambda_total - lambda1_list[i_ep]) * motion_loss + 1.0 * reg_loss + lambda1_list[i_ep] * Class_aug_loss + 0.5 * Reg_aug_loss
+            #         loss = lambda1_list[i_ep] * cls_loss_ori + 0.2 * motion_loss + 1.0 * reg_loss + 0.2 * Class_aug_loss + 0.5 * Reg_aug_loss
+            #         done = True
+            #         break
+            # if not done:
+            #     # From last epoch in lambda1_list to the final epoch
+            #     lambda_1 = lambda1_list[-1]
+            #     # loss = lambda_1 * cls_loss_ori + (lambda_total - lambda_1) * motion_loss + 1.0 * reg_loss + lambda_1 * Class_aug_loss + 0.5 * Reg_aug_loss
+            #     # loss = lambda_1 * cls_loss_ori + (
+            #     #             lambda_total - lambda_1) * cls_loss_memory + 1.0 * reg_loss
         else:
             # Without cycle memory
-            cls_loss_memory = 0
-            if correlation_loss is not None:
-                loss = cfg.USOT.TRAIN.LAMBDA_1_NAIVE * (cls_loss_ori) + 1.0 * reg_loss + 0.2 * correlation_loss
+            motion_loss = 0
+            if Class_aug_loss is not None:
+                loss = cfg.USOT.TRAIN.LAMBDA_1_NAIVE * (cls_loss_ori) + 1.0 * reg_loss + 0.2 * Class_aug_loss
             else:
                 # Loss for naive Siamese training
                 loss = cfg.USOT.TRAIN.LAMBDA_1_NAIVE * cls_loss_ori + 1.0 * reg_loss
@@ -370,7 +376,7 @@ def usot_train(args, wandb, train_loader, model, optimizer, epoch,
         if is_valid_number(loss.item()):
             optimizer.step()
         if args.use_wandb:
-            wandb.log({"loss": loss, "cls_ori": cls_loss_ori, "cls_memory": cls_loss_memory, "reg_loss": reg_loss})
+            wandb.log({"loss": loss, "cls_ori": cls_loss_ori, "motion_losses": motion_losses, "reg_loss": reg_loss})
             #wandb.log({"loss": loss, "reg_loss": reg_loss})
 
         # Record loss
@@ -381,29 +387,35 @@ def usot_train(args, wandb, train_loader, model, optimizer, epoch,
         cls_losses_ori.update(cls_loss_ori, template_color.size(0))
 
         try:
-            cls_loss_memory = cls_loss_memory.item()
+            motion_loss = motion_loss.item()
         except:
-            cls_loss_memory = 0
+            motion_loss = 0
 
-        cls_losses_memory.update(cls_loss_memory, template_color.size(0))
+        motion_losses.update(motion_loss, template_color.size(0))
 
         reg_loss = reg_loss.item()
         reg_losses.update(reg_loss, template_color.size(0))
 
         try:
-            correlation_loss = correlation_loss.item()
+            Class_aug_loss = Class_aug_loss.item()
         except:
-            correlation_loss = 0
-        correlation_losses.update(correlation_loss, template_color.size(0))
+            Class_aug_loss = 0
+        Class_aug_losses.update(Class_aug_loss, template_color.size(0))
+
+        # try:
+        #     Reg_aug_loss = Reg_aug_loss.item()
+        # except:
+        #     Reg_aug_loss = 0
+        # Reg_aug_losses.update(Reg_aug_loss, template_color.size(0))
 
         batch_time.update(time.time() - end)
         end = time.time()
 
         if (iter + 1) % cfg.PRINT_FREQ == 0:
             logger.info(
-                'Epoch: [{0}][{1}/{2}] lr: {lr:.7f}\t Batch Time: {batch_time.avg:.3f}s \t Data Time:{data_time.avg:.3f}s \t CLS_ORI Loss:{cls_loss_ori.avg:.5f} \t CLS_MEMORY Loss:{cls_loss_memory.avg:.5f} \t REG Loss:{reg_loss.avg:.5f} \t CORR Loss:{corr_loss.avg:.5f} \t Loss:{loss.avg:.5f}'.format(
+                'Epoch: [{0}][{1}/{2}] lr: {lr:.7f}\t Batch Time: {batch_time.avg:.3f}s \t Data Time:{data_time.avg:.3f}s \t CLS_ORI Loss:{cls_loss_ori.avg:.5f} \t Motion Loss:{motion_loss.avg:.5f} \t REG Loss:{reg_loss.avg:.5f} \t Class_Aug Loss:{Class_aug_loss.avg:.5f} \t Loss:{loss.avg:.5f}'.format(
                     epoch, iter + 1, len(train_loader), lr=cur_lr, batch_time=batch_time, data_time=data_time,
-                    loss=losses, cls_loss_ori=cls_losses_ori, cls_loss_memory=cls_losses_memory, corr_loss=correlation_losses, reg_loss=reg_losses))
+                    loss=losses, cls_loss_ori=cls_losses_ori, motion_loss=motion_losses, Class_aug_loss=Class_aug_losses, reg_loss=reg_losses))
 
             print_speed((epoch - 1) * len(train_loader) + iter + 1, batch_time.avg,
                         cfg.USOT.TRAIN.END_EPOCH * len(train_loader), logger)

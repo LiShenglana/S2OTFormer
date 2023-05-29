@@ -197,13 +197,16 @@ class USOTTracker(object):
                scale_z, p, template_mem=None, score_mem=None):
 
         # Track with the model
-        cls_score, bbox_pred, cls_memory, xf, corr = net.track(x_crops_color, x_crops_ir, template_mem=template_mem, score_mem=score_mem)
+        cls_score, bbox_pred, cls_memory, xf, corr, Reg_aug = net.track(x_crops_color, x_crops_ir, template_mem=template_mem, score_mem=score_mem)
         # cls_score, bbox_pred, cls_memory, xf = net.track(x_crops_color, x_crops_ir, template_mem=template_mem,
         #                                                        score_mem=score_mem)
         cls_score = F.sigmoid(cls_score).squeeze().cpu().data.numpy()
         cls_memory = F.sigmoid(cls_memory).squeeze().cpu().data.numpy()
         corr = F.sigmoid(corr).squeeze().cpu().data.numpy()
         corr = cv2.resize(corr, (cls_score.shape[0], cls_score.shape[1]))
+
+        # Reg_aug = Reg_aug.squeeze().permute(1, 2, 0).cpu().data.numpy()
+        # Reg_aug = cv2.resize(Reg_aug, (cls_score.shape[0], cls_score.shape[1])).transpose(2, 0, 1)
         # Aggregate online cls module and offline cls module
         # cls_score = p.ratio * cls_score + (1 - p.ratio) * cls_memory
         cls_score = 0.15 * cls_score + 0.7 * cls_memory + 0.15 * corr

@@ -31,6 +31,7 @@ class USOTDataset(Dataset):
 
         # Response map size
         self.size = 25
+        self.size2 = 31
         # Feature size of template patch
         self.tf_size = 15
         # Feature axis of search area (designed to be the same as response map size in USOT v1)
@@ -200,6 +201,7 @@ class USOTDataset(Dataset):
 
         # Pseudo regression labels for offline naive tracker
         reg_label, reg_weight = self.reg_label(bbox_s)
+        reg_label2, reg_weight2 = self.reg_label2(bbox_s)
         # reg_label_ir, reg_weight_ir = self.reg_label(bbox_s_ir)
         # visualization = True
         # if visualization:
@@ -222,9 +224,9 @@ class USOTDataset(Dataset):
             bbox_s = self.pool_label_search(bbox_s)
             bbox_s = np.array(bbox_s, np.float32)
             # Additionally return memory frames and bbox_s for Siamese search areas
-            return template_color, search_color, template_ir, search_ir, out_label, reg_label, reg_weight, bbox_t, search_memory_color, search_memory_ir, bbox_s, label2
+            return template_color, search_color, template_ir, search_ir, out_label, reg_label, reg_weight, reg_label2, reg_weight2, bbox_t, search_memory_color, search_memory_ir, bbox_s, label2
 
-        return template_color, search_color, template_ir, search_ir, out_label, reg_label, reg_weight, bbox_t, label2
+        return template_color, search_color, template_ir, search_ir, out_label, reg_label, reg_weight, reg_label2, reg_weight2, bbox_t, label2
 
     def _shuffle(self):
         """
@@ -264,6 +266,15 @@ class USOTDataset(Dataset):
         self.grid_to_search_x = x * self.stride + self.search_size // 2
         self.grid_to_search_y = y * self.stride + self.search_size // 2
 
+        sz2 = self.size2
+        sz_x2 = sz2 // 2
+        sz_y2 = sz2 // 2
+        x2, y2 = np.meshgrid(np.arange(0, sz2) - np.floor(float(sz_x2)),
+                           np.arange(0, sz2) - np.floor(float(sz_y2)))
+        self.grid_to_search2 = {}
+        self.grid_to_search_x2 = x2 * self.stride + self.search_size // 2
+        self.grid_to_search_y2 = y2 * self.stride + self.search_size // 2
+
         # Template feature map grid
         tf_sz = self.tf_size
         sz_x_t = tf_sz // 2
@@ -292,6 +303,24 @@ class USOTDataset(Dataset):
         t = self.grid_to_search_y - y1
         r = x2 - self.grid_to_search_x
         b = y2 - self.grid_to_search_y
+
+        l, t, r, b = map(lambda x: np.expand_dims(x, axis=-1), [l, t, r, b])
+        reg_label = np.concatenate((l, t, r, b), axis=-1)
+        reg_label_min = np.min(reg_label, axis=-1)
+        inds_nonzero = (reg_label_min > 0).astype(float)
+
+        return reg_label, inds_nonzero
+    def reg_label2(self, bbox):
+        """
+        Generate regression label
+        :param bbox: [x1, y1, x2, y2]
+        :return: [l, t, r, b]
+        """
+        x1, y1, x2, y2 = bbox
+        l = self.grid_to_search_x2 - x1
+        t = self.grid_to_search_y2 - y1
+        r = x2 - self.grid_to_search_x2
+        b = y2 - self.grid_to_search_y2
 
         l, t, r, b = map(lambda x: np.expand_dims(x, axis=-1), [l, t, r, b])
         reg_label = np.concatenate((l, t, r, b), axis=-1)

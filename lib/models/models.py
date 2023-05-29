@@ -375,8 +375,9 @@ class USOT_(nn.Module):
                                                                                                 memory_kernel=template_mem,
                                                                                                 memory_confidence=score_mem)
             corr, _ = self.correlation(xf_att, self.zf_att)
-            corr = self.class_embed(corr)
-            corr = self.change(corr, xf_att.shape[3])
+            Class_aug = self.class_embed(corr)
+            Class_aug = self.change(Class_aug, xf_att.shape[3])
+            # Reg_aug = self.change(self.bbox_embed(corr).sigmoid(), w=xf_att.shape[3])
             # cls_pred = cls_pred.squeeze(0)
             # c, h, w = cls_pred.size()
             # mask = torch.zeros((c, h, w)).cuda()
@@ -411,7 +412,7 @@ class USOT_(nn.Module):
                             break
 
             # Here xf is the feature of search areas which will be cropped soon according to the final bbox
-            return cls_pred, bbox_pred, cls_memory_pred, xf, corr
+            return cls_pred, bbox_pred, cls_memory_pred, xf, Class_aug, None
             # return cls_pred, bbox_pred, cls_memory_pred, xf
         else:
             # Track with offline module only
@@ -453,7 +454,7 @@ class USOT_(nn.Module):
         return features
 
     def forward(self, template_color, search_color, template_ir, search_ir, label=None, reg_target=None,
-                reg_weight=None, template_bbox=None, search_memory_color=None, search_memory_ir=None,
+                reg_weight=None, reg_target2=None, reg_weight2=None, template_bbox=None, search_memory_color=None, search_memory_ir=None,
                 search_bbox=None, cls_ratio=0.40, label2=None):
         """
         Training pipeline for both naive Siamese and cycle memory
@@ -499,8 +500,13 @@ class USOT_(nn.Module):
         if search_memory_color is not None:
             # Original Siamese fg/bg cls and bbox reg branch (self-track in paper)
             bbox_pred, cls_pred, cls_x, _, _ = self.connect_model(xf, kernel=zf)
-            # corr = self.correlation(xf_att, zf_att)
-            # corr = self.change(self.class_embed(corr), w=31)
+            corr, _ = self.correlation(xf_att, zf_att)
+
+            Class_aug = self.change(self.class_embed(corr), w=31)
+            Class_aug_loss = self._weighted_BCE(Class_aug, label2)
+
+            # Reg_aug = self.change(self.bbox_embed(corr), w=31)
+            # Reg_aug_loss = self.add_iouloss(Reg_aug, reg_target2, reg_weight2)
 
             # Add bbox regression loss
             reg_loss = self.add_iouloss(bbox_pred, reg_target, reg_weight)
@@ -593,13 +599,17 @@ class USOT_(nn.Module):
             torch.cuda.empty_cache()
 
             # return cls_loss_ori, cls_memory_loss, reg_loss
-            return cls_loss_ori, _, reg_loss, motion_loss
+            return cls_loss_ori, motion_loss, reg_loss, Class_aug_loss, None
         else:
             # The following logic is for purely offline naive Siamese training
             bbox_pred, cls_pred, _, _, _ = self.connect_model(xf, kernel=zf)
             corr, _ = self.correlation(xf_att, zf_att)
-            corr = self.change(self.class_embed(corr), w=31)
-            correlation_loss = self._weighted_BCE(corr, label2)
+
+            Class_aug = self.change(self.class_embed(corr), w=31)
+            Class_aug_loss = self._weighted_BCE(Class_aug, label2)
+
+            # Reg_aug = self.change(self.bbox_embed(corr).sigmoid(), w=31)
+            # Reg_aug_loss = self.add_iouloss(Reg_aug, reg_target2, reg_weight2)
 
             # for index in range(cls_pred.shape[0]):
             #     c, h, w = cls_pred[index].size()
@@ -634,10 +644,10 @@ class USOT_(nn.Module):
             torch.cuda.empty_cache()
 
             # return cls_loss, None, reg_loss
-            return cls_loss, None, reg_loss, correlation_loss
+            return cls_loss, None, reg_loss, Class_aug_loss, None
 
     def change(self, X=None, w=63):
-        opt = (X.permute((1, 3, 0, 2)).contiguous())
+        opt = (X.permute((1, 0, 3, 2)).contiguous())
         bs, Nq, C, HW = opt.size()
         opt_feat = opt.view(-1, C, w, w)
         return opt_feat
@@ -708,6 +718,7 @@ class USOT(USOT_):
                 self.input_proj2 = nn.Conv2d(1024, 256, kernel_size=1)
                 self.neck = AdjustLayer(in_channels=256, out_channels=256, pr_pool=settings['pr_pool'])
                 self.class_embed = MLP(256, 256, 1, 3)
+                self.bbox_embed = MLP(256, 256, 4, 3)
             elif self.fuse_method == 'Add':
                 self.neck = AdjustLayer(in_channels=1024, out_channels=256, pr_pool=settings['pr_pool'])
         elif self.modality == 'RGB':
