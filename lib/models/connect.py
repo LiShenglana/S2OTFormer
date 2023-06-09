@@ -127,20 +127,21 @@ class Conf_Fusion(nn.Module):
         x = x.view(-1, channel, h, w)
 
         # Calc confidence on each position
-        confidence = self.conf_gen(x)
-        confidence = torch.clamp(confidence, max=4, min=-6)
-        # Softmax each confidence map across all confidence maps
-        confidence = torch.exp(confidence)
-        confidence = confidence.view(batch, mem_size, channel, h, w)
-        confidence_sum = confidence.sum(dim=1).view(batch, 1, channel, h, w).repeat(1, mem_size, 1, 1, 1)
-        confidence_norm = confidence / confidence_sum
+        # confidence = self.conf_gen(x)
+        # confidence = torch.clamp(confidence, max=4, min=-6)
+        # # Softmax each confidence map across all confidence maps
+        # confidence = torch.exp(confidence)
+        # confidence = confidence.view(batch, mem_size, channel, h, w)
+        # confidence_sum = confidence.sum(dim=1).view(batch, 1, channel, h, w).repeat(1, mem_size, 1, 1, 1)
+        # confidence_norm = confidence / confidence_sum
 
         # The raw value for output (not weighted yet)
         value = self.value_gen(x)
         value = value.view(batch, mem_size, channel, h, w)
 
         # Weighted sum of the value maps, with confidence maps as element-wise weights
-        out = confidence_norm * value
+        # out = confidence_norm * value
+        out = value
         out = out.sum(dim=1)
 
         return out
@@ -234,6 +235,17 @@ class box_tower_reg(nn.Module):
         self.adjust = nn.Parameter(0.1 * torch.ones(1))
         self.bias = nn.Parameter(torch.Tensor(1.0 * torch.ones(1, 4, 1, 1)).cuda())
 
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_uniform_(m.weight, mode='fan_in', nonlinearity='leaky_relu')
+                if m.bias is not None:
+                    fan_in, _ = nn.init._calculate_fan_in_and_fan_out(m.weight)
+                    bound = 1 / math.sqrt(fan_in)
+                    nn.init.uniform_(m.bias, -bound, bound)
+            elif isinstance(m, nn.BatchNorm2d):
+                nn.init.uniform_(m.weight)
+                nn.init.zeros_(m.bias)
+
     def forward(self, search, kernel=None, memory_kernel=None,
                 memory_confidence=None, cls_x_store=None):
 
@@ -272,24 +284,27 @@ class box_tower_reg(nn.Module):
                 cls_mem_zs, _ = self.cls_encode(memory_kernel, x=None)
 
             # Multi-scale correlation, between the memory queue and the search area feature in the template frame
-            batch, mem_size = memory_confidence.shape
+            # batch, mem_size = memory_confidence.shape
             store_repeat = []
             for cls_x in cls_x_store:
                 _, c, h, w = cls_x.shape
-                cls_x_rep = cls_x.view(batch, 1, c, h, w)
-                cls_x_rep = cls_x_rep.repeat(1, mem_size, 1, 1, 1).view(-1, c, h, w)
+                cls_x_rep = cls_x.view(1, 1, c, h, w)
+                cls_x_rep = cls_x_rep.repeat(1, 1, 1, 1, 1).view(-1, c, h, w)
                 store_repeat.append(cls_x_rep)
 
             cls_mem_dw = self.cls_dw(cls_mem_zs, store_repeat)
             _, c, h, w = cls_mem_dw.shape
-            cls_mem_dw = cls_mem_dw.view(batch, mem_size, c, h, w)
+            cls_mem_dw = cls_mem_dw.view(1, 1, c, h, w)
 
             # Fuse memory correlation maps
             cls_mem_fusion = self.conf_fusion(cls_mem_dw)
+            # cls_mem_fusion = cls_mem_dw.sum(dim=1)
 
             # Memory cls head
             c_mem = self.cls_memory_tower(cls_mem_fusion)
             cls_mem = 0.1 * self.cls_memory_pred(c_mem)
+            # c_mem = self.cls_tower(cls_mem_fusion)
+            # cls_mem = 0.1 * self.cls_pred(c_mem)
 
             if kernel is not None:
                 torch.cuda.empty_cache()
@@ -308,23 +323,6 @@ class AdjustLayer(nn.Module):
             nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False),
             nn.BatchNorm2d(out_channels),
             )
-        # # self.upsample = nn.Sequential(
-        # #     nn.ConvTranspose2d(in_channels, out_channels, kernel_size=4, stride=2),
-        # #     nn.BatchNorm2d(out_channels),
-        # #     )
-        # self.upsampler = nn.Sequential(
-        #     conv3x3_bn_relu(in_channels, out_channels),
-        #     nn.ConvTranspose2d(out_channels, out_channels, kernel_size=1, stride=2, padding=1, bias=True),
-        #     nn.ReLU(True),
-        #     conv3x3_bn_relu(out_channels, out_channels),
-        #     nn.ConvTranspose2d(out_channels, out_channels, kernel_size=1, stride=2, padding=1, bias=True),
-        #     nn.ReLU(True),
-        #     conv3x3_bn_relu(out_channels, out_channels),
-        #     nn.ConvTranspose2d(out_channels, out_channels, kernel_size=1, stride=2, padding=1, bias=True),
-        #     nn.ReLU(True),
-        #     conv3x3_bn_relu(out_channels, out_channels),
-        #     nn.ConvTranspose2d(out_channels, out_channels, kernel_size=1, stride=2, padding=1, bias=True),
-        # )
         if pr_pool:
             self.prpooling = PrRoIPool2D(7, 7, spatial_scale=1.0)
 

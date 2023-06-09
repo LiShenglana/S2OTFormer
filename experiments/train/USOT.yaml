@@ -3,7 +3,7 @@ USOT:
   PRINT_FREQ: 10
   WORKERS: 32
   OUTPUT_DIR: 'var/log'   # Log file
-  CHECKPOINT_DIR: '/home/cscv/Documents/lsl/USOTFormer/scripts/VOT_train/TFF-Corr-motion-test/'   # Checkpoint file
+  CHECKPOINT_DIR: '/home/cscv/Documents/lsl/USOTFormer/scripts/LasHeR_train/TFF-Corr-motion/'   # Checkpoint file
 
   TRAIN:
     ISTRUE: True   # Whether to train, used in scripts/onekey_usot.py
@@ -18,7 +18,7 @@ USOT:
     PRETRAIN: '/home/cscv/Documents/lsl/USOT/scripts/pretrain/imagenet_pretrain.model' # 'moco_v2_800.model'
     WARM_POLICY: 'step'
     UNFIX_POLICY: 'log'
-#    RESUME: '/home/cscv/Documents/lsl/USOTFormer/scripts/test3/USOTFormer/VOT_train/test/attention_cat_addori_ln_linear_nodownsample_cross/checkpoint_e9.pth'
+#    RESUME: '/home/cscv/Documents/lsl/USOTFormer/scripts/VOT_train/TFF-Corr-motion-adjust/checkpoint_e24.pth'
 
     WARMUP:
       IFNOT: True
@@ -49,7 +49,7 @@ USOT:
     MEMORY_NUM: 4
     TRAINABLE_LAYER: ['layer1', 'layer2', 'layer3']
     #WHICH_USE: ['VID', 'GOT10K', 'LASOT', 'YTVOS']  # VID, GOT10K, LASOT, YTVOS
-    WHICH_USE: ['VOT2019rgbtir']  #'VOT2019rgbtir', 'LasHeR'
+    WHICH_USE: ['LasHeR']  #'VOT2019rgbtir', 'LasHeR'
 
   TEST:    # TEST model is same as TRAIN.MODEL
     ISTRUE: True  # Whether to test

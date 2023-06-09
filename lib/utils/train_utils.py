@@ -165,8 +165,20 @@ def load_pretrain_test(model, pretrained_path, print_unuse=True, gpus=None):
         pretrained_dict = remove_prefix(pretrained_dict, 'module.')  # remove multi-gpu label
         pretrained_dict = remove_prefix(pretrained_dict, 'feature_extractor.')   # remove online train
 
-    check_keys(model, pretrained_dict, print_unuse=print_unuse)
-    model.load_state_dict(pretrained_dict, strict=False)
+    processed_dict = dict()
+    # ori_keys = ["connect_model.cls_memory_pred.weight", "connect_model.conf_fusion", "backbone_net_RGB.features.conv1.weight"]
+    ori_keys = list(pretrained_dict.keys())
+    for ori_key in ori_keys:
+        if "connect_model.cls_memory_pred" in ori_key or "connect_model.conf_fusion" in ori_key or "connect_model.cls_memory_tower" in ori_key:
+            continue
+        else:
+            processed_dict[ori_key] = pretrained_dict[ori_key]
+
+    check_keys(model, processed_dict, print_unuse=print_unuse)
+    model.load_state_dict(processed_dict, strict=False)
+
+    # check_keys(model, pretrained_dict, print_unuse=print_unuse)
+    # model.load_state_dict(pretrained_dict, strict=False)
     return model
 
 

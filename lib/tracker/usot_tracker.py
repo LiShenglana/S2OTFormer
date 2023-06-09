@@ -1,4 +1,6 @@
 import os
+import random
+
 import cv2
 import numpy as np
 
@@ -10,6 +12,8 @@ from imgaug.augmentables.bbs import BoundingBox, BoundingBoxesOnImage
 from PIL import Image
 import datetime
 import imgaug as ia
+import math
+from lib.utils.train_utils import AverageMeter
 
 
 class USOTTracker(object):
@@ -30,6 +34,8 @@ class USOTTracker(object):
         state = dict()
         # Epoch test
         p = USOTConfig()
+        self.APCE_cls_memorys = AverageMeter()
+        self.Max_cls = AverageMeter()
 
         state['im_h'] = im_color.shape[0]
         state['im_w'] = im_color.shape[1]
@@ -197,20 +203,62 @@ class USOTTracker(object):
                scale_z, p, template_mem=None, score_mem=None):
 
         # Track with the model
-        cls_score, bbox_pred, cls_memory, xf, corr, Reg_aug = net.track(x_crops_color, x_crops_ir, template_mem=template_mem, score_mem=score_mem)
+        cls_score_off, bbox_pred, cls_memory, xf, corr, Reg_aug = net.track(x_crops_color, x_crops_ir, template_mem=template_mem, score_mem=score_mem)
         # cls_score, bbox_pred, cls_memory, xf = net.track(x_crops_color, x_crops_ir, template_mem=template_mem,
         #                                                        score_mem=score_mem)
-        cls_score = F.sigmoid(cls_score).squeeze().cpu().data.numpy()
+        #to test the performance using random class map
+        cls_score_off = F.sigmoid(cls_score_off).squeeze().cpu().data.numpy()
+        random = torch.empty((cls_score_off.shape[0], cls_score_off.shape[1]), dtype=torch.float32).uniform_(0.0, 1.0)
+        random = F.sigmoid(random).squeeze().cpu().data.numpy()
         cls_memory = F.sigmoid(cls_memory).squeeze().cpu().data.numpy()
         corr = F.sigmoid(corr).squeeze().cpu().data.numpy()
-        corr = cv2.resize(corr, (cls_score.shape[0], cls_score.shape[1]))
+        corr = cv2.resize(corr, (cls_score_off.shape[0], cls_score_off.shape[1]))
 
         # Reg_aug = Reg_aug.squeeze().permute(1, 2, 0).cpu().data.numpy()
         # Reg_aug = cv2.resize(Reg_aug, (cls_score.shape[0], cls_score.shape[1])).transpose(2, 0, 1)
         # Aggregate online cls module and offline cls module
         # cls_score = p.ratio * cls_score + (1 - p.ratio) * cls_memory
-        cls_score = 0.15 * cls_score + 0.7 * cls_memory + 0.15 * corr
+        # cls_score = 0.15 * cls_score_off + 0.15 * corr
+        # cls_score = 0.15 * cls_score_off + 0.15 * corr + 0.7 * random
+        cls_score = 0.15 * cls_score_off + 0.15 * corr + 0.7 * cls_memory
+        # APCE_cls_score = abs(cls_score.max() - cls_score.min())**2/((cls_score - cls_score.min())**2).mean()
+        APCE_cls_memory = abs(cls_memory.max() - cls_memory.min()) ** 2 / ((cls_memory - cls_memory.min()) ** 2).mean()
+        # APCE_corr = abs(corr.max() - corr.min()) ** 2 / ((corr - corr.min()) ** 2).mean()
+        # # APCE = APCE_cls_score + APCE_cls_memory + APCE_corr
+        # # APCE_cls_score = APCE_cls_score / APCE
+        # # APCE_cls_memory = APCE_cls_memory / APCE
+        # # APCE_corr = APCE_corr / APCE
+        # Max_cls_score = cls_score.max()
+        # Max_cls_memory = cls_memory.max()
+        # Max_corr = corr.max()
+        # # Max = Max_cls_score + Max_cls_memory + Max_corr
+        # # Max_cls_score = Max_cls_score / Max
+        # # Max_cls_memory = Max_cls_memory / Max
+        # # Max_corr = Max_corr / Max
+        APCE_cls_memory = APCE_cls_memory.item()
+        # Max_cls_score = Max_cls_score.item()
+        # cls_score1 = 0.15 * cls_score + 0.15 * corr + 0.7 * cls_memory
+        # cls_score2 = 0.5 * cls_score + 0.5 * corr
+        # APCE_cls_score1 = abs(cls_score1.max() - cls_score1.min()) ** 2 / ((cls_score1 - cls_score1.min()) ** 2).mean()
+        # APCE_cls_score2 = abs(cls_score2.max() - cls_score2.min()) ** 2 / ((cls_score2 - cls_score2.min()) ** 2).mean()
+        # if APCE_cls_score1 > APCE_cls_score2:
+        #     cls_score = cls_score1
+        # else:
+        #     cls_score = cls_score2
 
+        # if self.APCE_cls_memorys.avg == 0:
+        #     cls_score = 0.5 * cls_score_off + 0.5 * corr
+        # else:
+        #     if APCE_cls_memory / self.APCE_cls_memorys.avg > 1:
+        #         cls_score = 0.15 * cls_score_off + 0.15 * corr + 0.7 * cls_memory
+        #     else:
+        #         cls_score = 0.5 * cls_score_off + 0.5 * corr
+
+        self.APCE_cls_memorys.update(APCE_cls_memory)
+        # self.Max_cls_scores.update(Max_cls_score)
+        # cls_score = (APCE_cls_score + Max_cls_score) * cls_score + (APCE_cls_memory + Max_cls_memory) * cls_memory + (APCE_corr + Max_corr) * corr
+        # cls_score = Max_cls_score * cls_score + Max_cls_memory * cls_memory + Max_corr * corr
+        # cls_score = APCE_cls_score * cls_score + APCE_cls_memory * cls_memory + APCE_corr * corr
         # The bbox predicted
         bbox_pred = bbox_pred.squeeze().cpu().data.numpy()
 
@@ -266,9 +314,7 @@ class USOTTracker(object):
         # extract memory feature of the current frame with predicted bbox
         pred_bbox_to_prpool = self.pool_label_search(p, [pred_x1, pred_y1, pred_x2, pred_y2])
         pred_bbox_to_prpool = torch.tensor([pred_bbox_to_prpool]).float().cuda()
-        # elif p.Feature_Backbone == 'Vit':
-        #     feature_mem = net.extract_memory_feature(xf=xf, search_bbox=pred_bbox_to_prpool)
-        feature_mem = net.extract_memory_feature_ResNet(xf=xf, search_bbox=pred_bbox_to_prpool)
+        feature_mem = net.extract_memory_feature_ResNet_fuse(xf=xf, search_bbox=pred_bbox_to_prpool)
         feature_mem = feature_mem.cpu().detach()
         return target_pos, target_sz, cls_score[r_max, c_max], feature_mem
 
@@ -304,45 +350,41 @@ class USOTTracker(object):
         mem_queue_size_update = p.mem_queue_size - 3
 
 
-        # feature_map = memory_features
-        # # feature_map = feature_map.permute(0, 2, 3, 1)
-        # feature_map = feature_map[0].cpu().detach().numpy()
-        # pathfea = '/home/cscv/Documents/lsl/USOT/scripts/feature_map_save/Feature_map_save/'
-        # for index in range(feature_map.shape[0]):
-        #     feature_map_i = feature_map[index]
-        #     for j in range(feature_map_i.shape[2]):
-        #         image = Image.fromarray(np.uint8(feature_map_i[j]))
-        #         timestamp = datetime.datetime.now().strftime("%M-%S")
-        #         savepath = pathfea + timestamp + '_r.jpg'
-        #         image.save(savepath)
-
-        if mem_length <= 1:
-            template_mem += ([memory_features[0]] * (mem_queue_size_update + 1))
-            score_mem += ([memory_confidences[0]] * (mem_queue_size_update + 1))
-            template_mem = torch.cat(template_mem, dim=0)
-            score_mem = torch.tensor(score_mem).unsqueeze(0)
-        else:
-            # Online sample (N_q - 3) memory templates with the highest confidence scores
-            gap = (mem_length - 1) / mem_queue_size_update
-            for i in range(mem_queue_size_update):
-                # 2021.12.19: We notice that the calculation of start_index and end_index seems to deviate
-                #             from what we expect. We leave the implementation version here for reproducing issues.
-                start_index = min(int(int(i * gap) * mem_length), mem_length - 1)
-                end_index = min(int(int((i + 1) * gap) * mem_length), mem_length - 1)
-                if start_index >= end_index:
-                    template_mem.append(memory_features[start_index])
-                    score_mem.append(memory_confidences[start_index])
-                else:
-                    score_tmp = np.array(memory_confidences[start_index:end_index])
-                    # Pick (N_q - 3) frames with highest confidence scores
-                    max_index = np.argmax(score_tmp) + start_index
-                    template_mem.append(memory_features[max_index])
-                    score_mem.append(memory_confidences[max_index])
-            # Always pick the last memory template
-            template_mem.append(memory_features[-1])
-            score_mem.append(memory_confidences[-1])
-            template_mem = torch.cat(template_mem, dim=0)
-            score_mem = torch.tensor(score_mem).unsqueeze(0)
+        # if mem_length <= 1:
+        #     template_mem += ([memory_features[0]] * (mem_queue_size_update + 1))
+        #     score_mem += ([memory_confidences[0]] * (mem_queue_size_update + 1))
+        #     template_mem = torch.cat(template_mem, dim=0)
+        #     score_mem = torch.tensor(score_mem).unsqueeze(0)
+        # else:
+        #     # Online sample (N_q - 3) memory templates with the highest confidence scores
+        #     gap = (mem_length - 1) / mem_queue_size_update
+        #     for i in range(mem_queue_size_update):
+        #         # 2021.12.19: We notice that the calculation of start_index and end_index seems to deviate
+        #         #             from what we expect. We leave the implementation version here for reproducing issues.
+        #         start_index = min(int(int(i * gap) * mem_length), mem_length - 1)
+        #         end_index = min(int(int((i + 1) * gap) * mem_length), mem_length - 1)
+        #         if start_index >= end_index:
+        #             template_mem.append(memory_features[start_index])
+        #             score_mem.append(memory_confidences[start_index])
+        #         else:
+        #             score_tmp = np.array(memory_confidences[start_index:end_index])
+        #             # Pick (N_q - 3) frames with highest confidence scores
+        #             max_index = np.argmax(score_tmp) + start_index
+        #             template_mem.append(memory_features[max_index])
+        #             score_mem.append(memory_confidences[max_index])
+        #     # Always pick the last memory template
+        #     template_mem.append(memory_features[-1])
+        #     score_mem.append(memory_confidences[-1])
+        #     template_mem = torch.cat(template_mem, dim=0)
+        #     score_mem = torch.tensor(score_mem).unsqueeze(0)
+        # template_mem.append(memory_features[-1])
+        # score_mem.append(memory_confidences[-1])
+        # template_mem = torch.cat(template_mem, dim=0)
+        # score_mem = torch.tensor(score_mem).unsqueeze(0)
+        template_mem = memory_features[-1]
+        score_mem = memory_confidences[-1]
+        # template_mem = torch.cat(template_mem, dim=0)
+        score_mem = torch.tensor(score_mem).unsqueeze(0)
 
         target_pos, target_sz, confidence, feat_mem = self.update(net, x_crop_color.cuda(), x_crop_ir.cuda(), target_pos,
                                                                   target_sz * scale_z, window, scale_z, p,

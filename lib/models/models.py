@@ -112,11 +112,6 @@ class USOT_(nn.Module):
             elif data['key'] == 'n':
                 self.next_seq = True
 
-    # def feature_extractor_ResNet_RGB(self, x):
-    #     return self.features_RGB(x)
-    #
-    # def feature_extractor_ResNet_T(self, x):
-    #     return self.features_T(x)
 
     def feature_extractor(self, template: torch.Tensor,
                 search: torch.Tensor,
@@ -307,26 +302,6 @@ class USOT_(nn.Module):
         elif self.modality == 'T':
             _, zf_ir = self.backbone_net_T(z_ir)
             self.zf = zf_ir
-            # PrPool the template feature and down-sample the deep features
-            # if self.neck is not None:
-            #     _, self.zf = self.neck(zf_ir, crop=True, pr_pool=self.pr_pool, bbox=template_bbox)
-        # elif self.cfg.MODEL.BACKBONE.Feature_Backbone == 'Vit':
-        #     self.zf = self.feature_extractor(z_ir, z_color, temp=True)
-        #     self.zf = self.project(self.zf)
-        #     # _, self.zf = self.feature_extractor_ResNet(self.zf)
-        # # self.zf = zf_color
-
-        # feature_map = zf_color
-        # # feature_map = feature_map.permute(0, 2, 3, 1)
-        # feature_map = feature_map.cpu().detach().numpy()
-        # pathfea = '/home/cscv/Documents/lsl/USOT/scripts/feature_map_save/Feature_map_save/'
-        # for index in range(feature_map.shape[0]):
-        #     feature_map_i = feature_map[index]
-        #     for j in range(feature_map_i.shape[2]):
-        #         image = Image.fromarray(np.uint8(feature_map_i[j]))
-        #         timestamp = datetime.datetime.now().strftime("%M-%S")
-        #         savepath = pathfea + timestamp + '_r.jpg'
-        #         image.save(savepath)
 
         if self.neck is not None:
             _, self.zf = self.neck(self.zf, crop=True, pr_pool=self.pr_pool, bbox=template_bbox)
@@ -417,8 +392,11 @@ class USOT_(nn.Module):
         else:
             # Track with offline module only
             bbox_pred, cls_pred, _, _, _ = self.connect_model(xf, kernel=self.zf)
+            corr, _ = self.correlation(xf_att, self.zf_att)
+            Class_aug = self.class_embed(corr)
+            Class_aug = self.change(Class_aug, xf_att.shape[3])
 
-            return cls_pred, bbox_pred, None, None
+            return cls_pred, bbox_pred, None, xf, Class_aug, None
 
     def extract_memory_feature_ResNet_fuse(self, ori_x_color=None, ori_x_ir=None, xf=None, search_bbox=None):
         # Note that here search bbox is the bbox on the deep feature (not on the original search frame)
@@ -440,18 +418,6 @@ class USOT_(nn.Module):
         features = self.prpool_feature(xf, search_bbox)
         return features
 
-    def extract_memory_feature_ResNet(self, ori_x=None, xf=None, search_bbox=None, img='RGB'):
-        # Note that here search bbox is the bbox on the deep feature (not on the original search frame)
-        if ori_x is not None:
-            # _, xf = self.feature_extractor_ResNet(ori_x)
-            if img is 'RGB':
-                _, xf = self.backbone_net_RGB(ori_x)
-                xf = self.neck(xf, crop=False)
-            elif img is 'T':
-                _, xf = self.backbone_net_T(ori_x)
-                xf = self.neck(xf, crop=False)
-        features = self.prpool_feature(xf, search_bbox)
-        return features
 
     def forward(self, template_color, search_color, template_ir, search_ir, label=None, reg_target=None,
                 reg_weight=None, reg_target2=None, reg_weight2=None, template_bbox=None, search_memory_color=None, search_memory_ir=None,

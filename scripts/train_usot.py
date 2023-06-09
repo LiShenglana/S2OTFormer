@@ -298,16 +298,6 @@ def usot_train(args, wandb, train_loader, model, optimizer, epoch,
             search_bbox = None
             label2 = input[10].type(torch.FloatTensor).to(device)
 
-        # feature_map = search_color
-        # feature_map = feature_map.permute(0, 2, 3, 1)
-        # feature_map = feature_map.cpu().detach().numpy()
-        # pathfea = '/home/cscv/Documents/lsl/USOT/scripts/feature_map_save/'
-        # for index in range(feature_map.shape[0]):
-        #     feature_map_i = feature_map[index]
-        #     image = Image.fromarray(np.uint8(feature_map_i)).convert('RGB')
-        #     timestamp = datetime.datetime.now().strftime("%M-%S")
-        #     savepath = pathfea + timestamp + '_r.jpg'
-        #     image.save(savepath)
 
         # The following codes determines the linear weights for forward tracking in training
         # The response map of forward tracking is a linear combination of online and offline tracking module
