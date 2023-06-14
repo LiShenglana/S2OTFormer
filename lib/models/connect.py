@@ -297,14 +297,14 @@ class box_tower_reg(nn.Module):
             cls_mem_dw = cls_mem_dw.view(1, 1, c, h, w)
 
             # Fuse memory correlation maps
-            cls_mem_fusion = self.conf_fusion(cls_mem_dw)
-            # cls_mem_fusion = cls_mem_dw.sum(dim=1)
+            # cls_mem_fusion = self.conf_fusion(cls_mem_dw)
+            cls_mem_fusion = cls_mem_dw.sum(dim=1)
 
             # Memory cls head
-            c_mem = self.cls_memory_tower(cls_mem_fusion)
-            cls_mem = 0.1 * self.cls_memory_pred(c_mem)
-            # c_mem = self.cls_tower(cls_mem_fusion)
-            # cls_mem = 0.1 * self.cls_pred(c_mem)
+            # c_mem = self.cls_memory_tower(cls_mem_fusion)
+            # cls_mem = 0.1 * self.cls_memory_pred(c_mem)
+            c_mem = self.cls_tower(cls_mem_fusion)
+            cls_mem = 0.1 * self.cls_pred(c_mem)
 
             if kernel is not None:
                 torch.cuda.empty_cache()

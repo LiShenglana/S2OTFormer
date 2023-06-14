@@ -38,6 +38,7 @@ class USOT_(nn.Module):
         self.backbone_net_T = None
         self.connect_model = None
         self.zf = None
+        self.zf_ori = None
         self.zf_att = None
         self.zf_color = None
         self.zf_ir = None
@@ -305,6 +306,7 @@ class USOT_(nn.Module):
 
         if self.neck is not None:
             _, self.zf = self.neck(self.zf, crop=True, pr_pool=self.pr_pool, bbox=template_bbox)
+        self.zf_ori = self.zf
 
     def track(self, x_color, x_ir, template_mem=None, score_mem=None):
 
@@ -352,17 +354,6 @@ class USOT_(nn.Module):
             corr, _ = self.correlation(xf_att, self.zf_att)
             Class_aug = self.class_embed(corr)
             Class_aug = self.change(Class_aug, xf_att.shape[3])
-            # Reg_aug = self.change(self.bbox_embed(corr).sigmoid(), w=xf_att.shape[3])
-            # cls_pred = cls_pred.squeeze(0)
-            # c, h, w = cls_pred.size()
-            # mask = torch.zeros((c, h, w)).cuda()
-            # cls_pred = torch.where(cls_pred > 0, cls_pred, mask)
-            # r = 3
-            # for j in range(len(cls_pred)):
-            #     ind = torch.nonzero(cls_pred[j] == torch.max(cls_pred[j]))[0]
-            #     mask[j][ind[0]-r:ind[0]+r, ind[1]-r:ind[1]+r] = 1
-            # cls_pred = cls_pred * mask
-            # cls_pred = cls_pred.unsqueeze(0)
 
             if self.vis_attn:
                 for hook in hooks:

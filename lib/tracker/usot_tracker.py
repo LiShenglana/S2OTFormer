@@ -203,14 +203,13 @@ class USOTTracker(object):
                scale_z, p, template_mem=None, score_mem=None):
 
         # Track with the model
-        cls_score_off, bbox_pred, cls_memory, xf, corr, Reg_aug = net.track(x_crops_color, x_crops_ir, template_mem=template_mem, score_mem=score_mem)
-        # cls_score, bbox_pred, cls_memory, xf = net.track(x_crops_color, x_crops_ir, template_mem=template_mem,
-        #                                                        score_mem=score_mem)
+        # cls_score_off, bbox_pred, cls_memory, xf, corr, Reg_aug = net.track(x_crops_color, x_crops_ir, template_mem=template_mem, score_mem=score_mem)
+        cls_score_off, bbox_pred, _, xf, corr, _ = net.track(x_crops_color, x_crops_ir)
         #to test the performance using random class map
         cls_score_off = F.sigmoid(cls_score_off).squeeze().cpu().data.numpy()
-        random = torch.empty((cls_score_off.shape[0], cls_score_off.shape[1]), dtype=torch.float32).uniform_(0.0, 1.0)
-        random = F.sigmoid(random).squeeze().cpu().data.numpy()
-        cls_memory = F.sigmoid(cls_memory).squeeze().cpu().data.numpy()
+        # random = torch.empty((cls_score_off.shape[0], cls_score_off.shape[1]), dtype=torch.float32).uniform_(0.0, 1.0)
+        # random = F.sigmoid(random).squeeze().cpu().data.numpy()
+        # cls_memory = F.sigmoid(cls_memory).squeeze().cpu().data.numpy()
         corr = F.sigmoid(corr).squeeze().cpu().data.numpy()
         corr = cv2.resize(corr, (cls_score_off.shape[0], cls_score_off.shape[1]))
 
@@ -218,11 +217,11 @@ class USOTTracker(object):
         # Reg_aug = cv2.resize(Reg_aug, (cls_score.shape[0], cls_score.shape[1])).transpose(2, 0, 1)
         # Aggregate online cls module and offline cls module
         # cls_score = p.ratio * cls_score + (1 - p.ratio) * cls_memory
-        # cls_score = 0.15 * cls_score_off + 0.15 * corr
+        cls_score = 0.15 * cls_score_off + 0.15 * corr
         # cls_score = 0.15 * cls_score_off + 0.15 * corr + 0.7 * random
-        cls_score = 0.15 * cls_score_off + 0.15 * corr + 0.7 * cls_memory
+        # cls_score = 0.15 * cls_score_off + 0.15 * corr + 0.7 * cls_memory
         # APCE_cls_score = abs(cls_score.max() - cls_score.min())**2/((cls_score - cls_score.min())**2).mean()
-        APCE_cls_memory = abs(cls_memory.max() - cls_memory.min()) ** 2 / ((cls_memory - cls_memory.min()) ** 2).mean()
+        # APCE_cls_memory = abs(cls_memory.max() - cls_memory.min()) ** 2 / ((cls_memory - cls_memory.min()) ** 2).mean()
         # APCE_corr = abs(corr.max() - corr.min()) ** 2 / ((corr - corr.min()) ** 2).mean()
         # # APCE = APCE_cls_score + APCE_cls_memory + APCE_corr
         # # APCE_cls_score = APCE_cls_score / APCE
@@ -235,30 +234,12 @@ class USOTTracker(object):
         # # Max_cls_score = Max_cls_score / Max
         # # Max_cls_memory = Max_cls_memory / Max
         # # Max_corr = Max_corr / Max
-        APCE_cls_memory = APCE_cls_memory.item()
+        # APCE_cls_memory = APCE_cls_memory.item()
         # Max_cls_score = Max_cls_score.item()
         # cls_score1 = 0.15 * cls_score + 0.15 * corr + 0.7 * cls_memory
         # cls_score2 = 0.5 * cls_score + 0.5 * corr
         # APCE_cls_score1 = abs(cls_score1.max() - cls_score1.min()) ** 2 / ((cls_score1 - cls_score1.min()) ** 2).mean()
         # APCE_cls_score2 = abs(cls_score2.max() - cls_score2.min()) ** 2 / ((cls_score2 - cls_score2.min()) ** 2).mean()
-        # if APCE_cls_score1 > APCE_cls_score2:
-        #     cls_score = cls_score1
-        # else:
-        #     cls_score = cls_score2
-
-        # if self.APCE_cls_memorys.avg == 0:
-        #     cls_score = 0.5 * cls_score_off + 0.5 * corr
-        # else:
-        #     if APCE_cls_memory / self.APCE_cls_memorys.avg > 1:
-        #         cls_score = 0.15 * cls_score_off + 0.15 * corr + 0.7 * cls_memory
-        #     else:
-        #         cls_score = 0.5 * cls_score_off + 0.5 * corr
-
-        self.APCE_cls_memorys.update(APCE_cls_memory)
-        # self.Max_cls_scores.update(Max_cls_score)
-        # cls_score = (APCE_cls_score + Max_cls_score) * cls_score + (APCE_cls_memory + Max_cls_memory) * cls_memory + (APCE_corr + Max_corr) * corr
-        # cls_score = Max_cls_score * cls_score + Max_cls_memory * cls_memory + Max_corr * corr
-        # cls_score = APCE_cls_score * cls_score + APCE_cls_memory * cls_memory + APCE_corr * corr
         # The bbox predicted
         bbox_pred = bbox_pred.squeeze().cpu().data.numpy()
 
