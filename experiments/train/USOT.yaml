@@ -3,7 +3,7 @@ USOT:
   PRINT_FREQ: 10
   WORKERS: 32
   OUTPUT_DIR: 'var/log'   # Log file
-  CHECKPOINT_DIR: '/home/cscv/Documents/lsl/USOTFormer/scripts/LasHeR_train/TFF-Corr-motion/'   # Checkpoint file
+  CHECKPOINT_DIR: '/home/cscv/Documents/lsl/USOTFormer/scripts/LasHeR_train/bbox_filt/TFF-Corr-motion/'   # Checkpoint file
 
   TRAIN:
     ISTRUE: True   # Whether to train, used in scripts/onekey_usot.py
